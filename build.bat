@@ -30,7 +30,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [3/3] Copying exe to project root...
-copy /Y "src-tauri\target\release\Plan Viewer.exe" "..\plan-viewer-desktop.exe"
+copy /Y "src-tauri\target\release\plan-viewer-desktop.exe" "..\plan-viewer-desktop.exe"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to copy exe to project root.
     pause

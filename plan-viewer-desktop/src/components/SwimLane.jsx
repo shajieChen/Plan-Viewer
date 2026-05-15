@@ -1,8 +1,18 @@
+import { useEffect, useRef } from 'preact/hooks';
+
 /**
  * SwimLane view: CSS Grid layout with one column per Phase group.
  * Each artifact is a colored card in its phase column.
  */
-export function SwimLane({ artifacts, onSelectArtifact }) {
+export function SwimLane({ artifacts, onSelectArtifact, highlightedId }) {
+  const cardRefs = useRef({});
+
+  // Scroll to highlighted card
+  useEffect(() => {
+    if (highlightedId && cardRefs.current[highlightedId]) {
+      cardRefs.current[highlightedId].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [highlightedId]);
   // Group artifacts by their derived group
   const groups = {};
   for (const artifact of artifacts) {
@@ -27,8 +37,10 @@ export function SwimLane({ artifacts, onSelectArtifact }) {
           <div class="swimlane-cards">
             {groups[col].map((artifact) => (
               <div
-                class={`swimlane-card status-${artifact.status}`}
+                class={`swimlane-card status-${artifact.status}${highlightedId === artifact.id ? ' swimlane-card--highlight' : ''}`}
                 key={artifact.id}
+                data-artifact-id={artifact.id}
+                ref={(el) => { if (el) cardRefs.current[artifact.id] = el; }}
                 onClick={() => onSelectArtifact(artifact)}
                 title={`${artifact.id} (${artifact.status})`}
               >

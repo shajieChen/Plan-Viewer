@@ -17,6 +17,8 @@ export function App() {
   });
   const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
   const [selectedArtifact, setSelectedArtifact] = useState(null);
+  const [highlightedId, setHighlightedId] = useState(null);
+  const [notFoundToast, setNotFoundToast] = useState(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   useEffect(() => {
@@ -36,6 +38,19 @@ export function App() {
   const markdownPreviews = projectData ? projectData.markdown_previews : {};
 
   const projectNames = data ? Object.keys(data.projects) : [];
+
+  // Handle dependency navigation
+  const handleNavigateDep = (depId) => {
+    if (isCompact) return; // SwimLane not rendered in compact mode
+    const found = artifacts.find((a) => a.id === depId);
+    if (found) {
+      setHighlightedId(depId);
+      setTimeout(() => setHighlightedId(null), 1000);
+    } else {
+      setNotFoundToast(`未找到: ${depId}`);
+      setTimeout(() => setNotFoundToast(null), 1500);
+    }
+  };
 
   return (
     <div class={`app-container ${hoverState}`}>
@@ -80,6 +95,7 @@ export function App() {
                 <SwimLane
                   artifacts={artifacts}
                   onSelectArtifact={setSelectedArtifact}
+                  highlightedId={highlightedId}
                 />
               )}
             </div>
@@ -91,7 +107,9 @@ export function App() {
                   changeEvents={changeEvents}
                   markdownPreview={markdownPreviews[selectedArtifact.id]}
                   onClose={() => setSelectedArtifact(null)}
+                  onNavigateDep={handleNavigateDep}
                 />
+                {notFoundToast && <span class="nav-toast">{notFoundToast}</span>}
               </div>
             )}
           </>

@@ -4,7 +4,7 @@ import { marked } from 'marked';
 /**
  * DetailPanel: shows artifact details when a swim-lane card is clicked.
  */
-export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose }) {
+export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose, onNavigateDep }) {
   if (!artifact) return null;
 
   // Filter change events related to this artifact
@@ -37,9 +37,19 @@ export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose }
         <div class="detail-section">
           <h4>Dependencies</h4>
           <ul class="detail-deps">
-            {artifact.depends_on.map((dep, i) => (
-              <li key={i}>{typeof dep === 'string' ? dep : (dep && dep.id) || JSON.stringify(dep)}</li>
-            ))}
+            {artifact.depends_on.map((dep, i) => {
+              const depId = typeof dep === 'string' ? dep : (dep && dep.id) || JSON.stringify(dep);
+              return (
+                <li key={i}>
+                  <a
+                    class="dep-link"
+                    onClick={(e) => { e.preventDefault(); onNavigateDep && onNavigateDep(depId); }}
+                  >
+                    {depId}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

@@ -173,3 +173,120 @@ Quality: ✓ N passed / ✗ N failed / ⚠ N warnings
 | Phase 3: Gen preconditions | Generate all from scratch | Validate existing, add only missing |
 | Phase 4: Handoff inference | Suggest all candidates | Check existing HCs for staleness only |
 | Phase 5: Quality check | Full project check | Incremental on affected subgraph |
+
+---
+
+## Reference Appendix
+
+### 4A. Directory Layout
+
+```
+<project>/
+  research/           R-xxx-*.md          (facts, findings, evidence)
+  decisions/          D-xxx-*.yaml        (chosen approaches)
+  plan/               P-xxx-*.md          (execution plans)
+  prompts/landing/    LP-xxx-*.md         (implementation prompts)
+  prompts/test/       TP-xxx-*.md         (verification prompts)
+  status/
+    status.yaml                           (authoritative state — only apply_changes.py writes)
+    schema.yaml                           (structural constraints for validation)
+    .cache/                               (changed_files.json, candidate_transitions.json, approved_transitions.json)
+  tools/                                  (scan_changes, validate_status, propagate, apply_changes, render_status)
+  views/                                  (read-only derived output, regenerated every run)
+  AGENTS.md                               (one-page index for AI agents, regenerated)
+```
+
+### 4B. State Machine (9 states)
+
+```
+draft → reviewed → approved → ready
+ready → needs_update | blocked
+needs_update → draft | reviewed
+blocked → draft | reviewed
+Any non-terminal → invalidated | deprecated | archived
+```
+
+States: draft, reviewed, approved, ready, blocked, needs_update, invalidated, deprecated, archived.
+
+### 4C. Propagation Rules
+
+```
+Rule 1: Research changed    → dependent Decisions check → dependent Plans → needs_update
+Rule 2: Plan changed        → dependent LPs → needs_update; dependent TPs → needs_update
+Rule 3: LP changed          → dependent TPs → needs_update; LP's produced HCs → stale
+Rule 4: TP becomes ready    → re-evaluate all LP preconditions that reference this TP
+Rule 5: Blocker open/close  → recompute all affected artifacts + gates
+Rule 6: HC stale/invalidated → all consumers with ready/approved status → needs_update | blocked
+```
+
+Never propagate beyond the dependency graph. Never blanket-mark all artifacts.
+
+### 4D. status.yaml Canonical Fields
+
+```yaml
+meta: {project_name, created, last_updated, total_artifacts, total_research, total_blockers, hotspots}
+artifacts: [{id, type: plan|landing_prompt|test_prompt, path, status, depends_on: [], produces_handoffs?: [], consumes_handoffs?: [], last_checked?}]
+research_findings: [{id, title, path, status, evidence?: [], affects?: [], invalidates?: []}]
+decisions: [{id, title, path, status, based_on: [], rejects?: [], affects?: []}]
+assumptions: [{id, statement, status, source?}]
+evidence: [{label, source, confidence: high|medium|low, supports: []}]
+blockers: [{id, title, severity: high|medium|low, status: open|resolved, source: [], blocks: []}]
+gates: [{id, name, status: passed|failed, required: [], checks: [{id, description, status: passed|failed}]}]
+preconditions: [{id, target, requires: [{artifact|handoff, field, equals|in|min}], status: passed|failed}]
+handoff_contexts: [{id, producer, version: int, status, facts: [{id, statement, source}], results: [{id, type, path, summary}], constraints: [{id, statement, source}], consumed_by: [], consumed_status: [{consumer, status, consumed_version, consumed_at}]}]
+change_events: [{id: CE-xxx, time: ISO-8601, source, event_type, affected: [], transitions: [{artifact, from, to, reason}]}]
+snapshots: {git_baseline: string|null, file_hashes: {path: sha256}}
+```
+
+### 4E. Hard Constraints
+
+**DO:**
+- Preserve all existing user-authored fields when updating status.yaml
+- Record every state change in change_events with timestamp, source, reason
+- Use requires_agent_review: true for medium/low confidence inferences
+- Generate preconditions for every LP automatically
+- Run quality checklist after every inference pass
+- Use Python tools for mechanical work when available
+- Assign sequential IDs (CE-001, PC-001, G-001, HC-001, etc.)
+
+**DON'T:**
+- Copy research body text into status.yaml (only IDs, paths, one-line summaries)
+- Set any artifact to "ready" without all preconditions passing
+- Overwrite or delete user-authored files (research/, decisions/, plan/, prompts/)
+- Propagate beyond the dependency graph
+- Treat views/ as source of truth (it's derived output)
+- Auto-bump handoff versions without explicit agent confirmation
+- Edit status.yaml directly (always go through approved_transitions.json → apply_changes.py)
+- Register artifacts with confidence=low without agent review
+
+### 4F. Output Format
+
+Every invocation must end with this structured report (omit sections with no content, cap "Recommended Next Actions" at 5):
+
+```markdown
+## Processing Summary
+<one paragraph: mode used, what was detected/created>
+
+## Changes Detected
+- <path>: <classification> [new|modified|deleted]
+
+## State Transitions
+| Artifact | From | To | Reason |
+|----------|------|----|--------|
+
+## Quality Issues
+| Check | Status | Details |
+|-------|--------|---------|
+
+## Handoff Status
+| HC | Producer | Status | Version | Consumers | Issue |
+|----|----------|--------|---------|-----------|-------|
+
+## Blocked Items
+- <id>: <what it blocks> — <reason>
+
+## Recommended Next Actions
+1. <highest priority action>
+2. ...
+3. ... (max 5)
+```

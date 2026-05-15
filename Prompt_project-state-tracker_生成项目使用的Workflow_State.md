@@ -14,7 +14,7 @@ Never edit user-authored files. Only write to:
 - AGENTS.md (regenerated from status.yaml)
 - status/.cache/* (intermediate analysis artifacts)
 
-When Python tools exist (tools/scan_changes.py, tools/propagate.py, tools/validate_status.py, tools/apply_changes.py, tools/render_status.py), use them for mechanical work. Otherwise, perform equivalent logic inline and scaffold the tools.
+When Python tools exist (tools/dirty_check.py, tools/scan_changes.py, tools/propagate.py, tools/validate_status.py, tools/apply_changes.py, tools/render_status.py), use them for mechanical work. Otherwise, perform equivalent logic inline and scaffold the tools.
 
 ---
 
@@ -54,6 +54,20 @@ ROUTE:
 | "check handoff status" | AUDIT | Render handoff_view, report stale/invalid |
 
 ### Execution Pipeline
+
+0. **PRE-CHECK** (Dirty Guard): Run `python tools/dirty_check.py --project <project>`
+   - Parse JSON output from stdout
+   - If `status == "error"` and exit code 1 → status.yaml missing, proceed to INIT mode (step 1)
+   - If `status == "clean"` → skip to step 1
+   - If `status == "dirty"` → auto-refresh pipeline:
+     a. Write dirty_files to `status/.cache/changed_files.json` (format: `{"changes": [...], "total": N}`, each entry has path/classification/change_type)
+     b. Run `python tools/propagate.py --project <project>`
+     c. Read `candidate_transitions.json`, filter to only `requires_agent_review: false` entries
+     d. Write filtered entries to `approved_transitions.json` (format: `{"transitions": [...]}`)
+     e. Run `python tools/apply_changes.py --project <project>`
+     f. Run `python tools/render_status.py --project <project>`
+     g. Report: "PRE-CHECK: {N} dirty file(s) detected, {M} transition(s) auto-applied, views refreshed."
+   - Proceed to step 1 with fresh state
 
 1. Detect project state → select mode
 2. Scaffold missing directories and files (INIT modes only)
@@ -166,13 +180,13 @@ Quality: ✓ N passed / ✗ N failed / ⚠ N warnings
 
 ### Mode Differentiation
 
-| Phase | INIT_FROM_DOCS | AUDIT |
-|-------|----------------|-------|
-| Phase 1: Scan | ALL files in tracked dirs | Only CHANGED files (from scan_changes.py) |
-| Phase 2: Infer deps | All artifacts, full content read | Changed artifacts + their direct dependents |
-| Phase 3: Gen preconditions | Generate all from scratch | Validate existing, add only missing |
-| Phase 4: Handoff inference | Suggest all candidates | Check existing HCs for staleness only |
-| Phase 5: Quality check | Full project check | Incremental on affected subgraph |
+| Phase | INIT_FROM_DOCS | AUDIT | PRE-CHECK (Dirty Guard) |
+|-------|----------------|-------|------------------------|
+| Phase 1: Scan | ALL files in tracked dirs | Only CHANGED files (from scan_changes.py) | Only files flagged by dirty_check.py |
+| Phase 2: Infer deps | All artifacts, full content read | Changed artifacts + their direct dependents | Dirty files + direct dependents |
+| Phase 3: Gen preconditions | Generate all from scratch | Validate existing, add only missing | Skip (no new generation) |
+| Phase 4: Handoff inference | Suggest all candidates | Check existing HCs for staleness only | Skip |
+| Phase 5: Quality check | Full project check | Incremental on affected subgraph | Skip (deferred to explicit AUDIT) |
 
 ### AUDIT Optimization: Output Hash Comparison
 

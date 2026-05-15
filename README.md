@@ -14,6 +14,16 @@ Project State Tracker 的交互式可视化 Dashboard 工具。
 - **Markdown 预览** — 直接在 Dashboard 内阅读 artifact 对应的文件内容
 - **类型 Filter** — 按 Plan / LandingPrompt / TestPrompt / Research / Decision 筛选
 
+## 演示效果
+
+### 桌面版 (Tauri)
+
+![桌面版执行效果](Docs/PNG/Plan_Viewer_Exe.gif)
+
+### 网页版 (Browser Dashboard)
+
+![网页版执行效果](Docs/PNG/Website_Exe.gif)
+
 ## 技术栈
 
 - **生成方式**：Python 脚本读取 status.yaml → 注入 JSON 数据 → 输出单文件 HTML

@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generation-timestamp" content="">
+    <title>Project Dashboard</title>
+
+    <!-- React 18 (pinned major version) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel standalone for in-browser JSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+
+    <!-- Mermaid.js for diagram rendering -->
+    <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+
+    <!-- marked.js for markdown rendering -->
+    <script src="https://unpkg.com/marked@9/marked.min.js"></script>
+
+    <!-- Tailwind CSS Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            animation: {
+              'fade-slide-up': 'fadeSlideUp 0.4s ease-out forwards',
+              'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+            },
+            keyframes: {
+              fadeSlideUp: {
+                '0%': { opacity: '0', transform: 'translateY(8px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              pulseGlow: {
+                '0%, 100%': { boxShadow: '0 0 8px rgba(239,68,68,0.2)' },
+                '50%': { boxShadow: '0 0 16px rgba(239,68,68,0.4)' },
+              },
+            },
+          },
+        },
+      }
+    </script>
+
+    <style>
+        /* === Reset & Base === */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* === Status Badge === */
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+
+        /* === Mermaid Overrides === */
+        .mermaid {
+            background: transparent;
+        }
+
+        /* === Custom Scrollbar === */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.25);
+        }
+
+        /* === Mermaid Node Hover === */
+        .node:hover rect,
+        .node:hover polygon,
+        .node:hover circle {
+            filter: brightness(1.2) drop-shadow(0 0 8px currentColor);
+            transition: filter 0.2s ease;
+        }
+
+        /* === Card Stagger Animation === */
+        .stagger-item {
+            opacity: 0;
+            animation: fadeSlideUp 0.4s ease-out forwards;
+        }
+
+        @keyframes fadeSlideUp {
+            0% { opacity: 0; transform: translateY(8px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* === Markdown Prose Overrides === */
+        .prose h1 { font-size: 1.5rem; margin-bottom: 0.75rem; margin-top: 1.5rem; font-weight: 700; }
+        .prose h2 { font-size: 1.25rem; margin-bottom: 0.5rem; margin-top: 1.25rem; font-weight: 600; }
+        .prose h3 { font-size: 1.1rem; margin-bottom: 0.5rem; margin-top: 1rem; font-weight: 600; }
+        .prose p { margin-bottom: 0.75rem; line-height: 1.7; }
+        .prose ul, .prose ol { margin-bottom: 0.75rem; padding-left: 1.5rem; }
+        .prose li { margin-bottom: 0.25rem; }
+        .prose a { color: #2563eb; text-decoration: underline; }
+        .prose a:hover { color: #1d4ed8; }
+        .prose code { font-size: 0.85em; background: #f1f5f9; padding: 0.125rem 0.375rem; border-radius: 0.25rem; }
+        .prose pre { padding: 1rem; overflow-x: auto; border-radius: 0.5rem; background: #f1f5f9; border: 1px solid #e2e8f0; }
+        .prose pre code { background: none; padding: 0; }
+        .prose blockquote { border-left: 3px solid #8EABC9; padding-left: 1rem; color: #64748b; margin-bottom: 0.75rem; }
+        .prose table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+        .prose th, .prose td { border: 1px solid #e2e8f0; padding: 0.5rem 0.75rem; text-align: left; }
+        .prose th { background: #f8fafc; font-weight: 600; }
+        .prose img { max-width: 100%; border-radius: 0.5rem; }
+    </style>
+</head>
+<body class="bg-[#3D6794] text-slate-800">
+    <!-- Embedded project data (replaced by Python generator) -->
+    <script id="app-data" type="application/json">{{APP_DATA}}</script>
+
+    <!-- React mount point -->
+    <div id="root"></div>
+
+    <!-- React App (Babel-transpiled JSX) -->
+    <script type="text/babel">
+        // Initialize Mermaid with dark theme
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis',
+            },
+            securityLevel: 'loose',
+        });
+
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // Status color mapping
+        const STATUS_COLORS = {
+            draft: '#6b7280',
+            reviewed: '#3b82f6',
+            approved: '#6366f1',
+            ready: '#10b981',
+            blocked: '#ef4444',
+            needs_update: '#f59e0b',
+            invalidated: '#991b1b',
+            deprecated: '#78716c',
+            archived: '#d1d5db',
+        };
+
+        // Parse embedded JSON data
+        function loadAppData() {
+            const el = document.getElementById('app-data');
+            if (!el) return null;
+            try {
+                return JSON.parse(el.textContent);
+            } catch (e) {
+                console.error('Failed to parse app data:', e);
+                return null;
+            }
+        }
+
+        // Swim Lane View component
+        function SwimLaneView({ artifacts, activeFilters, onArtifactSelect }) {
+            const GROUPS = ['Phase1', 'Phase2', 'Phase3', 'Phase4', 'Phase5', 'CodeGen', 'Other'];
+            const ALL_TYPES = ['plan', 'landing_prompt', 'test_prompt'];
+
+            // Filter to only show rows for active types
+            const visibleTypes = ALL_TYPES.filter(t => activeFilters[t]);
+
+            // Build a lookup: { group: { type: [artifacts] } }
+            const cellMap = useMemo(() => {
+                const map = {};
+                GROUPS.forEach(g => {
+                    map[g] = {};
+                    ALL_TYPES.forEach(t => { map[g][t] = []; });
+                });
+                artifacts.forEach(artifact => {
+                    const group = artifact.group || 'Other';
+                    const type = artifact.type;
+                    if (map[group] && map[group][type]) {
+                        map[group][type].push(artifact);
+                    }
+                });
+                return map;
+            }, [artifacts]);
+
+            if (visibleTypes.length === 0) {
+                return (
+                    <div className="text-center py-10 px-5 text-slate-400 text-sm">
+                        <p>No artifact types selected. Enable type filters to see artifacts.</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div
+                    className="grid gap-2 w-full"
+                    style={{ gridTemplateColumns: `auto repeat(${GROUPS.length}, 1fr)`, gridTemplateRows: `auto repeat(${visibleTypes.length}, auto)` }}
+                >
+                    {/* Header row: empty corner + group headers */}
+                    <div className="text-xs font-semibold text-slate-500 text-center py-2 px-1 bg-white/70 backdrop-blur-sm rounded-lg"></div>
+                    {GROUPS.map(group => (
+                        <div key={group} className="text-xs font-semibold text-slate-500 text-center py-2 px-1 bg-white/70 backdrop-blur-sm rounded-lg">{group}</div>
+                    ))}
+
+                    {/* Data rows: one per visible type */}
+                    {visibleTypes.map(type => (
+                        <React.Fragment key={type}>
+                            {/* Row label */}
+                            <div className="text-xs font-medium text-slate-500 py-2 px-3 flex items-start bg-white/70 backdrop-blur-sm rounded-lg">{type}</div>
+
+                            {/* Cells for each group */}
+                            {GROUPS.map(group => {
+                                const cellArtifacts = cellMap[group][type] || [];
+                                return (
+                                    <div key={`${group}-${type}`} className="flex flex-col gap-1.5 p-2 min-h-[60px] bg-white/700 rounded-xl border border-[#8EABC9] transition-all duration-200 hover:bg-white/80 hover:border-[#8EABC9]">
+                                        {cellArtifacts.map(artifact => (
+                                            <div
+                                                key={artifact.id}
+                                                className="p-2 px-3 rounded-lg cursor-pointer transition-all duration-200 backdrop-blur-sm border hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
+                                                style={{
+                                                    backgroundColor: (STATUS_COLORS[artifact.status] || '#6b7280') + '33',
+                                                    borderColor: (STATUS_COLORS[artifact.status] || '#6b7280') + '4D',
+                                                }}
+                                                onClick={() => onArtifactSelect(artifact)}
+                                                role="button"
+                                                tabIndex={0}
+                                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onArtifactSelect(artifact); }}
+                                                aria-label={`Artifact ${artifact.id}, status ${artifact.status}`}
+                                            >
+                                                <div className="text-xs font-medium text-slate-800 break-all">{artifact.id}</div>
+                                                <div className="text-[0.65rem] text-slate-500 mt-0.5">{artifact.status}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </React.Fragment>
+                    ))}
+                </div>
+            );
+        }
+
+        // StateMachineView component
+        function StateMachineView({ artifacts }) {
+            const containerRef = React.useRef(null);
+            const [svgContent, setSvgContent] = React.useState('');
+            const renderIdRef = React.useRef(0);
+
+            useEffect(() => {
+                if (!containerRef.current) return;
+
+                // Count artifacts per state (global, unaffected by type filters)
+                const ALL_STATES = [
+                    'draft', 'reviewed', 'approved', 'ready', 'blocked',
+                    'needs_update', 'invalidated', 'deprecated', 'archived'
+                ];
+                const counts = {};
+                ALL_STATES.forEach(s => { counts[s] = 0; });
+                (artifacts || []).forEach(a => {
+                    if (counts.hasOwnProperty(a.status)) {
+                        counts[a.status]++;
+                    }
+                });
+
+                // Generate Mermaid stateDiagram-v2 syntax
+                const lines = ['stateDiagram-v2'];
+
+                // State definitions with counts
+                ALL_STATES.forEach(status => {
+                    lines.push(`    ${status} : ${status} (${counts[status]})`);
+                });
+
+                // Nominal transitions
+                const transitions = [
+                    ['draft', 'reviewed'],
+                    ['reviewed', 'approved'],
+                    ['approved', 'ready'],
+                    ['ready', 'needs_update'],
+                    ['ready', 'blocked'],
+                    ['needs_update', 'draft'],
+                    ['needs_update', 'reviewed'],
+                    ['blocked', 'draft'],
+                    ['blocked', 'reviewed'],
+                ];
+                transitions.forEach(([from, to]) => {
+                    lines.push(`    ${from} --> ${to}`);
+                });
+
+                // Terminal transitions (any non-terminal state → terminal)
+                const terminalStates = ['invalidated', 'deprecated', 'archived'];
+                terminalStates.forEach(terminal => {
+                    lines.push(`    [*] --> ${terminal} : any state`);
+                });
+
+                const mermaidCode = lines.join('\n');
+
+                // Render with mermaid
+                renderIdRef.current++;
+                const renderId = `statemachine-${renderIdRef.current}-${Date.now()}`;
+
+                mermaid.render(renderId, mermaidCode).then(({ svg }) => {
+                    setSvgContent(svg);
+                }).catch(err => {
+                    console.error('Mermaid render error (StateMachineView):', err);
+                    setSvgContent(`<pre style="color:#ef4444;">${err.message || 'Render error'}</pre>`);
+                });
+            }, [artifacts]);
+
+            return (
+                <div className="w-full overflow-auto" ref={containerRef}>
+                    <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+                </div>
+            );
+        }
+
+        // DAGView component - renders artifact dependency graph using Mermaid flowchart LR
+        function DAGView({ artifacts, dependencies, activeFilters, onArtifactSelect }) {
+            const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+            const containerRef = useRef(null);
+            const renderIdRef = useRef(0);
+
+            // Get active filter set (types that are enabled)
+            const activeFilterSet = useMemo(() => {
+                const set = new Set();
+                Object.entries(activeFilters).forEach(([type, enabled]) => {
+                    if (enabled) set.add(type);
+                });
+                return set;
+            }, [activeFilters]);
+
+            // Filter artifacts by active type filters
+            const visibleArtifacts = useMemo(() => {
+                if (!artifacts) return [];
+                return artifacts.filter(a => activeFilterSet.has(a.type));
+            }, [artifacts, activeFilterSet]);
+
+            // Group visible artifacts by their derived group
+            const groups = useMemo(() => {
+                const grouped = {};
+                visibleArtifacts.forEach(artifact => {
+                    const group = artifact.group || 'Other';
+                    if (!grouped[group]) grouped[group] = [];
+                    grouped[group].push(artifact);
+                });
+                return grouped;
+            }, [visibleArtifacts]);
+
+            // Ordered group names for consistent rendering
+            const GROUP_ORDER = ['Phase1', 'Phase2', 'Phase3', 'Phase4', 'Phase5', 'CodeGen', 'Other'];
+
+            // Get visible group names (non-empty groups only)
+            const visibleGroups = useMemo(() => {
+                return GROUP_ORDER.filter(g => groups[g] && groups[g].length > 0);
+            }, [groups]);
+
+            // Build set of visible node IDs (not filtered and not in collapsed groups)
+            const visibleNodeIds = useMemo(() => {
+                const ids = new Set();
+                visibleArtifacts.forEach(a => {
+                    const group = a.group || 'Other';
+                    if (!collapsedGroups.has(group)) {
+                        ids.add(a.id);
+                    }
+                });
+                return ids;
+            }, [visibleArtifacts, collapsedGroups]);
+
+            // Map artifact IDs to their group for edge redirection
+            const artifactGroupMap = useMemo(() => {
+                const map = {};
+                visibleArtifacts.forEach(a => {
+                    map[a.id] = a.group || 'Other';
+                });
+                return map;
+            }, [visibleArtifacts]);
+
+            // Generate Mermaid flowchart code
+            const mermaidCode = useMemo(() => {
+                if (visibleGroups.length === 0) return null;
+
+                const lines = ['flowchart LR'];
+
+                // Render each visible group
+                visibleGroups.forEach(groupName => {
+                    const groupArtifacts = groups[groupName];
+                    if (collapsedGroups.has(groupName)) {
+                        // Collapsed: single placeholder node
+                        const placeholderId = `${groupName}_collapsed`;
+                        lines.push(`    ${placeholderId}["${groupName} ▶"]`);
+                    } else {
+                        // Expanded: subgraph with individual nodes
+                        lines.push(`    subgraph ${groupName}`);
+                        groupArtifacts.forEach(artifact => {
+                            // Sanitize ID for mermaid (replace special chars)
+                            const nodeId = artifact.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+                            const label = artifact.id.replace(/"/g, '#quot;');
+                            lines.push(`        ${nodeId}["${label}"]`);
+                            // Apply status class to node
+                            lines.push(`        class ${nodeId} status_${artifact.status}`);
+                        });
+                        lines.push('    end');
+                    }
+                });
+
+                // Render edges between visible nodes, redirecting to collapsed placeholders
+                if (dependencies) {
+                    const visibleArtifactIds = new Set(visibleArtifacts.map(a => a.id));
+
+                    dependencies.forEach(dep => {
+                        const fromId = dep.from_id;
+                        const toId = dep.to_id;
+
+                        // Both endpoints must be in the visible (filtered) artifact set
+                        if (!visibleArtifactIds.has(fromId) || !visibleArtifactIds.has(toId)) return;
+
+                        const fromGroup = artifactGroupMap[fromId];
+                        const toGroup = artifactGroupMap[toId];
+
+                        // Determine actual node IDs (redirect to placeholder if collapsed)
+                        let fromNode = collapsedGroups.has(fromGroup)
+                            ? `${fromGroup}_collapsed`
+                            : fromId.replace(/[^a-zA-Z0-9_-]/g, '_');
+                        let toNode = collapsedGroups.has(toGroup)
+                            ? `${toGroup}_collapsed`
+                            : toId.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+                        // Skip self-edges (can happen when both endpoints collapse to same placeholder)
+                        if (fromNode === toNode) return;
+
+                        // Arrow style based on dependency type
+                        let arrow = '-->';
+                        if (dep.dep_type === 'implements') arrow = '-.->';
+                        else if (dep.dep_type === 'verifies') arrow = '-...->';
+
+                        lines.push(`    ${fromNode} ${arrow} ${toNode}`);
+                    });
+                }
+
+                // classDef for each status
+                Object.entries(STATUS_COLORS).forEach(([status, color]) => {
+                    lines.push(`    classDef status_${status} fill:${color},color:#fff,stroke:${color}`);
+                });
+
+                return lines.join('\n');
+            }, [visibleGroups, groups, collapsedGroups, dependencies, visibleArtifacts, artifactGroupMap]);
+
+            // Render mermaid diagram
+            useEffect(() => {
+                if (!mermaidCode || !containerRef.current) return;
+
+                const renderDiagram = async () => {
+                    renderIdRef.current += 1;
+                    const renderId = `dag-mermaid-${renderIdRef.current}`;
+
+                    try {
+                        // Clear previous content
+                        containerRef.current.innerHTML = '';
+
+                        const { svg } = await mermaid.render(renderId, mermaidCode);
+                        if (containerRef.current) {
+                            containerRef.current.innerHTML = svg;
+
+                            // Remove any inline width/height styles that Mermaid adds
+                            // so the SVG renders at its natural intrinsic size
+                            const svgEl = containerRef.current.querySelector('svg');
+                            if (svgEl) {
+                                svgEl.style.maxWidth = 'none';
+                                svgEl.style.width = '';
+                                svgEl.style.height = '';
+                            }
+
+                            // Attach click handlers to nodes via event delegation
+                            containerRef.current.addEventListener('click', handleSvgClick);
+
+                            // Default zoom is 10x (set in state init), no auto-fit
+                        }
+                    } catch (err) {
+                        console.error('Mermaid render error:', err);
+                        if (containerRef.current) {
+                            containerRef.current.innerHTML = '<p class="empty-state">Failed to render DAG diagram</p>';
+                        }
+                    }
+                };
+
+                renderDiagram();
+
+                return () => {
+                    if (containerRef.current) {
+                        containerRef.current.removeEventListener('click', handleSvgClick);
+                    }
+                };
+            }, [mermaidCode]);
+
+            // Handle clicks on SVG nodes to identify artifact
+            const handleSvgClick = useCallback((e) => {
+                // Walk up from click target to find a node group with an ID
+                let target = e.target;
+                while (target && target !== containerRef.current) {
+                    // Mermaid nodes have class 'node' and an id attribute
+                    if (target.classList && target.classList.contains('node')) {
+                        const nodeId = target.id;
+                        if (nodeId) {
+                            // Extract the artifact ID from the node ID
+                            // Mermaid prefixes node IDs with 'flowchart-' and appends a number
+                            const cleanId = nodeId.replace(/^flowchart-/, '').replace(/-\d+$/, '');
+                            // Find matching artifact
+                            const artifact = artifacts.find(a =>
+                                a.id === cleanId || a.id.replace(/[^a-zA-Z0-9_-]/g, '_') === cleanId
+                            );
+                            if (artifact && onArtifactSelect) {
+                                onArtifactSelect(artifact);
+                            }
+                        }
+                        break;
+                    }
+                    target = target.parentElement;
+                }
+            }, [artifacts, onArtifactSelect]);
+
+            // Toggle group collapse/expand
+            const toggleGroup = useCallback((groupName) => {
+                setCollapsedGroups(prev => {
+                    const next = new Set(prev);
+                    if (next.has(groupName)) {
+                        next.delete(groupName);
+                    } else {
+                        next.add(groupName);
+                    }
+                    return next;
+                });
+            }, []);
+
+            // Zoom and pan state
+            const [zoom, setZoom] = useState(10);
+            const [pan, setPan] = useState({ x: 0, y: 0 });
+            const [isDragging, setIsDragging] = useState(false);
+            const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+            const diagramWrapperRef = useRef(null);
+
+            // Handle mouse wheel zoom
+            const handleWheel = useCallback((e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Shift key accelerates zoom speed (5x)
+                const speed = e.shiftKey ? 0.5 : 0.1;
+                const delta = e.deltaY > 0 ? -speed : speed;
+                setZoom(prev => Math.max(prev + delta, 0.1));
+            }, []);
+
+            // Attach wheel listener with passive: false to prevent browser zoom
+            useEffect(() => {
+                const el = diagramWrapperRef.current;
+                if (!el) return;
+                el.addEventListener('wheel', handleWheel, { passive: false });
+                return () => el.removeEventListener('wheel', handleWheel);
+            }, [handleWheel]);
+
+            // Handle mouse down for pan
+            const handleMouseDown = useCallback((e) => {
+                // Only left button, and not on a node
+                if (e.button !== 0) return;
+                setIsDragging(true);
+                dragStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+            }, [pan]);
+
+            const handleMouseMove = useCallback((e) => {
+                if (!isDragging) return;
+                const dx = e.clientX - dragStartRef.current.x;
+                const dy = e.clientY - dragStartRef.current.y;
+                setPan({ x: dragStartRef.current.panX + dx, y: dragStartRef.current.panY + dy });
+            }, [isDragging]);
+
+            const handleMouseUp = useCallback(() => {
+                setIsDragging(false);
+            }, []);
+
+            // Calculate fit-to-screen zoom based on SVG content size vs container size
+            const fitToScreen = useCallback(() => {
+                if (!containerRef.current || !diagramWrapperRef.current) return;
+                const svg = containerRef.current.querySelector('svg');
+                if (!svg) return;
+
+                const containerRect = diagramWrapperRef.current.getBoundingClientRect();
+
+                // Get the SVG's intrinsic (natural) size from its attributes
+                // Mermaid sets width like "1234.5px" or just "1234.5"
+                const widthAttr = svg.getAttribute('width');
+                const heightAttr = svg.getAttribute('height');
+                let svgWidth = widthAttr ? parseFloat(widthAttr) : 0;
+                let svgHeight = heightAttr ? parseFloat(heightAttr) : 0;
+
+                // Fallback: use getBBox for the actual content bounds
+                if (svgWidth === 0 || svgHeight === 0) {
+                    try {
+                        const bbox = svg.getBBox();
+                        svgWidth = bbox.width + bbox.x;
+                        svgHeight = bbox.height + bbox.y;
+                    } catch (e) {
+                        return;
+                    }
+                }
+
+                if (svgWidth === 0 || svgHeight === 0) return;
+
+                // Calculate scale to fit the width of the container (prioritize horizontal fit)
+                const padding = 20;
+                const scaleX = (containerRect.width - padding) / svgWidth;
+                const scaleY = (containerRect.height - padding) / svgHeight;
+                // Use the smaller scale to ensure everything fits, but at least 0.1
+                const fitZoom = Math.max(Math.min(scaleX, scaleY), 0.1);
+
+                setZoom(fitZoom);
+                // Center vertically, align left with small margin
+                const scaledWidth = svgWidth * fitZoom;
+                const scaledHeight = svgHeight * fitZoom;
+                const offsetX = Math.max(0, (containerRect.width - scaledWidth) / 2);
+                const offsetY = Math.max(0, (containerRect.height - scaledHeight) / 2);
+                setPan({ x: offsetX, y: offsetY });
+            }, []);
+
+            // Reset zoom/pan to fit-to-screen
+            const resetView = useCallback(() => {
+                fitToScreen();
+            }, [fitToScreen]);
+
+            // Attach global mouse events for dragging
+            useEffect(() => {
+                if (isDragging) {
+                    window.addEventListener('mousemove', handleMouseMove);
+                    window.addEventListener('mouseup', handleMouseUp);
+                    return () => {
+                        window.removeEventListener('mousemove', handleMouseMove);
+                        window.removeEventListener('mouseup', handleMouseUp);
+                    };
+                }
+            }, [isDragging, handleMouseMove, handleMouseUp]);
+
+            if (!artifacts || visibleArtifacts.length === 0) {
+                return (
+                    <div className="w-full flex flex-col flex-1 min-h-0">
+                        <p className="text-center py-10 px-5 text-slate-400 text-sm">No artifacts to display. Adjust type filters or check project data.</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="w-full flex flex-col flex-1 min-h-0 overflow-hidden">
+                    {/* Group collapse/expand controls */}
+                    <div className="flex gap-2 mb-3 flex-wrap">
+                        {visibleGroups.map(groupName => (
+                            <button
+                                key={groupName}
+                                className={`px-3 py-1 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${
+                                    collapsedGroups.has(groupName)
+                                        ? 'bg-white/80 border-[#8EABC9] text-slate-700'
+                                        : 'bg-white/70 border-[#8EABC9] text-slate-500 hover:bg-white/90 hover:text-slate-700'
+                                }`}
+                                onClick={() => toggleGroup(groupName)}
+                                title={collapsedGroups.has(groupName) ? `Expand ${groupName}` : `Collapse ${groupName}`}
+                            >
+                                {collapsedGroups.has(groupName) ? '\u25B6' : '\u25BC'} {groupName}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Zoomable/pannable diagram container */}
+                    <div
+                        ref={diagramWrapperRef}
+                        className={`overflow-hidden relative flex-1 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                        onMouseDown={handleMouseDown}
+                    >
+                        <div
+                            ref={containerRef}
+                            className="origin-top-left inline-block"
+                            style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+                        />
+                        {/* Zoom controls */}
+                        <div className="absolute bottom-3 right-3 flex gap-1 z-[5]">
+                            <button className="w-8 h-8 rounded-lg border border-[#8EABC9] bg-white/70 backdrop-blur-sm text-slate-700 text-base cursor-pointer flex items-center justify-center transition-all duration-200 hover:bg-white/95 hover:shadow-lg" onClick={() => setZoom(z => z + 0.2)} title="Zoom in">+</button>
+                            <button className="w-8 h-8 rounded-lg border border-[#8EABC9] bg-white/70 backdrop-blur-sm text-slate-700 text-base cursor-pointer flex items-center justify-center transition-all duration-200 hover:bg-white/95 hover:shadow-lg" onClick={() => setZoom(z => Math.max(z - 0.2, 0.1))} title="Zoom out">−</button>
+                            <button className="w-8 h-8 rounded-lg border border-[#8EABC9] bg-white/70 backdrop-blur-sm text-slate-700 text-base cursor-pointer flex items-center justify-center transition-all duration-200 hover:bg-white/95 hover:shadow-lg" onClick={resetView} title="Fit to screen">⟲</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // HotspotPanel component
+        function HotspotPanel({ artifacts, changeEvents, onArtifactSelect }) {
+            // Filter artifacts to only blocked or needs_update
+            const hotspots = useMemo(() => {
+                const blocked = artifacts
+                    .filter(a => a.status === 'blocked')
+                    .sort((a, b) => a.id.localeCompare(b.id));
+                const needsUpdate = artifacts
+                    .filter(a => a.status === 'needs_update')
+                    .sort((a, b) => a.id.localeCompare(b.id));
+                return [...blocked, ...needsUpdate];
+            }, [artifacts]);
+
+            // Find the reason from the most recent change event affecting an artifact
+            const getReasonForArtifact = useCallback((artifactId) => {
+                // Sort change events by time descending to find most recent first
+                const sorted = [...changeEvents].sort((a, b) => {
+                    return new Date(b.time) - new Date(a.time);
+                });
+
+                for (const event of sorted) {
+                    if (event.affected && event.affected.includes(artifactId)) {
+                        // Extract reason from the matching transition entry for this artifact
+                        if (event.transitions && event.transitions.length > 0) {
+                            for (const transition of event.transitions) {
+                                if (transition.artifact === artifactId && transition.reason) {
+                                    return transition.reason;
+                                }
+                            }
+                            // Fallback: check any transition with a reason
+                            for (const transition of event.transitions) {
+                                if (transition.reason) {
+                                    return transition.reason;
+                                }
+                            }
+                        }
+                        // Event found but no reason in transitions
+                        return 'No recorded reason';
+                    }
+                }
+                return 'No recorded reason';
+            }, [changeEvents]);
+
+            // Get suggested action based on status
+            const getSuggestedAction = (status) => {
+                if (status === 'blocked') return 'Resolve blocker';
+                if (status === 'needs_update') return 'Review and update';
+                return '';
+            };
+
+            // Empty state
+            if (hotspots.length === 0) {
+                return (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center text-slate-400 text-sm">No items currently need attention</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="grid grid-cols-2 gap-4 auto-rows-auto">
+                    {hotspots.map((artifact, index) => {
+                        const isHero = index === 0 && hotspots.length > 1;
+                        return (
+                            <div
+                                key={artifact.id}
+                                className={`${isHero ? 'col-span-2' : ''} bg-white/70 backdrop-blur-xl rounded-2xl border border-[#8EABC9] p-6 cursor-pointer transition-all duration-300 hover:bg-white/90 hover:scale-[1.01] hover:shadow-xl ${artifact.status === 'blocked' ? 'animate-pulse-glow' : ''}`}
+                                onClick={() => onArtifactSelect(artifact)}
+                            >
+                                <div className={`h-1 w-16 rounded-full mb-4 ${
+                                    artifact.status === 'blocked'
+                                        ? 'bg-gradient-to-r from-red-500 to-red-500/0'
+                                        : 'bg-gradient-to-r from-amber-500 to-amber-500/0'
+                                }`} />
+                                <div className="text-base font-semibold text-slate-800 mb-1">{artifact.id}</div>
+                                <div className="text-sm text-slate-500 mb-3">
+                                    {getReasonForArtifact(artifact.id)}
+                                </div>
+                                <div className={`text-xs font-medium ${
+                                    artifact.status === 'blocked' ? 'text-red-600' : 'text-amber-600'
+                                }`}>
+                                    {getSuggestedAction(artifact.status)}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        // DetailSidebar component - displays full artifact details including
+        // dependencies, last_checked, and markdown preview (title + excerpt).
+        // Updates content reactively when a different artifact is selected.
+        function DetailSidebar({ artifact, isOpen, onClose, markdownPreviews, projectName }) {
+            // Resize state
+            const [sidebarWidth, setSidebarWidth] = useState(360);
+            const [isResizing, setIsResizing] = useState(false);
+            const resizeStartRef = useRef({ x: 0, width: 360 });
+
+            // Reset width when sidebar opens
+            useEffect(() => {
+                if (isOpen) {
+                    setSidebarWidth(360);
+                }
+            }, [isOpen]);
+
+            // Handle resize drag
+            const handleResizeStart = useCallback((e) => {
+                e.preventDefault();
+                setIsResizing(true);
+                resizeStartRef.current = { x: e.clientX, width: sidebarWidth };
+            }, [sidebarWidth]);
+
+            useEffect(() => {
+                if (!isResizing) return;
+
+                const handleMove = (e) => {
+                    const dx = resizeStartRef.current.x - e.clientX;
+                    const newWidth = Math.min(Math.max(resizeStartRef.current.width + dx, 280), 600);
+                    setSidebarWidth(newWidth);
+                };
+
+                const handleUp = () => {
+                    setIsResizing(false);
+                };
+
+                window.addEventListener('mousemove', handleMove);
+                window.addEventListener('mouseup', handleUp);
+                return () => {
+                    window.removeEventListener('mousemove', handleMove);
+                    window.removeEventListener('mouseup', handleUp);
+                };
+            }, [isResizing]);
+
+            // Format ISO-8601 timestamp to a readable local string
+            const formatTimestamp = (isoStr) => {
+                if (!isoStr) return '—';
+                try {
+                    const date = new Date(isoStr);
+                    if (isNaN(date.getTime())) return isoStr;
+                    return date.toLocaleString();
+                } catch (e) {
+                    return isoStr;
+                }
+            };
+
+            // Get markdown preview for the current artifact
+            const preview = artifact ? (markdownPreviews[artifact.id] || null) : null;
+
+            return (
+                <div className={`bg-white/80 backdrop-blur-2xl border-l border-[#8EABC9] shadow-xl shadow-slate-200/60 overflow-y-auto transition-all duration-300 ease-out ${!isOpen ? 'w-0 p-0 overflow-hidden translate-x-full' : 'p-5'}`} style={isOpen ? { width: sidebarWidth + 'px', position: 'relative', gridArea: 'sidebar' } : { width: 0, gridArea: 'sidebar' }}>
+                    {isOpen && (
+                        <div
+                            className={`absolute left-0 top-0 w-1 h-full cursor-col-resize z-[5] transition-colors duration-200 hover:bg-blue-500 ${isResizing ? 'bg-blue-500' : 'bg-transparent'}`}
+                            onMouseDown={handleResizeStart}
+                        />
+                    )}
+                    {isOpen && artifact && (
+                        <>
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-base font-semibold text-slate-800">Artifact Details</span>
+                                <button
+                                    className="bg-transparent border-none text-slate-500 text-lg cursor-pointer p-1 px-2 rounded hover:bg-white/90 hover:text-slate-800 transition-all duration-200"
+                                    onClick={onClose}
+                                    aria-label="Close sidebar"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">ID</div>
+                                <div className="text-sm text-slate-700">{artifact.id}</div>
+                            </div>
+                            {artifact.path && (
+                                <div className="py-3 border-b border-[#8EABC9]">
+                                    <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Source File</div>
+                                    <div className="text-sm text-slate-700">
+                                        <a
+                                            href={`/api/file?path=${encodeURIComponent(artifact.path)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            style={{ color: '#3b82f6', textDecoration: 'underline', fontSize: '0.85rem', wordBreak: 'break-all' }}
+                                        >
+                                            {artifact.path}
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Type</div>
+                                <div className="text-sm text-slate-700">{artifact.type}</div>
+                            </div>
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Status</div>
+                                <div className="text-sm text-slate-700">
+                                    <select
+                                        className="status-badge cursor-pointer border-none outline-none text-white font-medium"
+                                        style={{ backgroundColor: STATUS_COLORS[artifact.status] }}
+                                        value={artifact.status}
+                                        onChange={(e) => {
+                                            const newStatus = e.target.value;
+                                            if (newStatus === artifact.status) return;
+                                            fetch('/api/artifact/status', {
+                                                method: 'PATCH',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    project: projectName,
+                                                    artifact_id: artifact.id,
+                                                    new_status: newStatus,
+                                                }),
+                                            })
+                                            .then(res => {
+                                                if (!res.ok) return res.json().then(d => { throw new Error(d.error || '修改失败'); });
+                                            })
+                                            .catch(err => {
+                                                alert('状态修改失败: ' + err.message);
+                                            });
+                                        }}
+                                    >
+                                        {['draft','reviewed','approved','ready','blocked','needs_update','invalidated','deprecated','archived'].map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Group</div>
+                                <div className="text-sm text-slate-700">{artifact.group}</div>
+                            </div>
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Dependencies</div>
+                                <div className="text-sm text-slate-700">
+                                    {artifact.depends_on && artifact.depends_on.length > 0 ? (
+                                        <ul className="list-none p-0 m-0">
+                                            {artifact.depends_on.map(dep => (
+                                                <li key={dep}>{dep}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <span className="text-sm text-slate-400 italic">None</span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="py-3 border-b border-[#8EABC9]">
+                                <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Last Checked</div>
+                                <div className="text-sm text-slate-700">
+                                    {formatTimestamp(artifact.last_checked)}
+                                </div>
+                            </div>
+                            {preview && (
+                                <div className="py-3 border-b border-[#8EABC9]">
+                                    <div className="text-[0.7rem] text-slate-400 uppercase tracking-wider mb-1">Markdown Preview</div>
+                                    <div className="mt-1 p-3 bg-white/80 backdrop-blur-md rounded-xl border border-[#8EABC9]">
+                                        <div className="text-sm font-semibold text-slate-800 mb-1.5">{preview.title}</div>
+                                        {preview.excerpt && (
+                                            <div className="text-xs text-slate-500 leading-relaxed">{preview.excerpt}</div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        // Utility: resolve relative path (handle .. and .)
+        function resolvePath(path) {
+            const parts = path.split('/');
+            const resolved = [];
+            for (const part of parts) {
+                if (part === '.' || part === '') continue;
+                if (part === '..') {
+                    resolved.pop();
+                } else {
+                    resolved.push(part);
+                }
+            }
+            return resolved.join('/');
+        }
+
+        // ReadmeViewer component - displays markdown files with breadcrumb navigation
+        function ReadmeViewer({ currentPath, history, onNavigate, onBreadcrumbClick }) {
+            const [content, setContent] = useState('');
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const contentRef = useRef(null);
+
+            // Fetch markdown file content
+            useEffect(() => {
+                setLoading(true);
+                setError(null);
+                fetch(`/api/file?path=${encodeURIComponent(currentPath)}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error(`文件未找到: ${currentPath}`);
+                        return res.text();
+                    })
+                    .then(text => {
+                        setContent(text);
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        setError(err.message);
+                        setLoading(false);
+                    });
+            }, [currentPath]);
+
+            // Render markdown and intercept links
+            useEffect(() => {
+                if (!contentRef.current || !content) return;
+
+                // Render markdown with marked.js
+                const html = marked.parse(content);
+                contentRef.current.innerHTML = html;
+
+                // Intercept clicks on links
+                const handleClick = (e) => {
+                    const link = e.target.closest('a');
+                    if (!link) return;
+
+                    const href = link.getAttribute('href');
+                    if (!href) return;
+
+                    // Absolute URLs - open in new tab
+                    if (href.startsWith('http://') || href.startsWith('https://')) {
+                        link.setAttribute('target', '_blank');
+                        link.setAttribute('rel', 'noopener noreferrer');
+                        return;
+                    }
+
+                    // Anchor links - scroll within page
+                    if (href.startsWith('#')) {
+                        const target = contentRef.current.querySelector(href);
+                        if (target) target.scrollIntoView({ behavior: 'smooth' });
+                        e.preventDefault();
+                        return;
+                    }
+
+                    // Relative .md links - navigate within viewer
+                    if (href.endsWith('.md') || href.includes('.md#')) {
+                        e.preventDefault();
+                        const mdPath = href.split('#')[0];
+                        // Resolve relative path based on current file's directory
+                        const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                        const resolvedPath = resolvePath(basePath + mdPath);
+                        onNavigate(resolvedPath);
+                        return;
+                    }
+
+                    // Other relative files - open via API in new tab
+                    e.preventDefault();
+                    const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+                    const resolvedPath = resolvePath(basePath + href);
+                    window.open(`/api/file?path=${encodeURIComponent(resolvedPath)}`, '_blank');
+                };
+
+                contentRef.current.addEventListener('click', handleClick);
+                return () => {
+                    if (contentRef.current) {
+                        contentRef.current.removeEventListener('click', handleClick);
+                    }
+                };
+            }, [content, currentPath, onNavigate]);
+
+            // Build expanded breadcrumb from history
+            const expandedBreadcrumbs = useMemo(() => {
+                if (history.length <= 1) {
+                    return [{ label: '📄 README.md', path: history[0], isLast: true }];
+                }
+                const lastPath = history[history.length - 1];
+                const parts = lastPath.split('/');
+                const items = [{ label: '📄 README.md', path: history[0], isLast: false }];
+                // Add intermediate directory segments
+                for (let i = 0; i < parts.length - 1; i++) {
+                    items.push({ label: parts[i], path: null, isLast: false });
+                }
+                // Add current file
+                items.push({ label: parts[parts.length - 1], path: lastPath, isLast: true });
+                return items;
+            }, [history]);
+
+            return (
+                <div className="flex-1 flex flex-col overflow-hidden bg-white/60 backdrop-blur-xl rounded-2xl border border-[#8EABC9]">
+                    {/* Breadcrumb bar */}
+                    <div className="px-4 py-2.5 border-b border-[#8EABC9] bg-white/80 backdrop-blur-sm rounded-t-2xl flex items-center gap-1 flex-wrap text-sm">
+                        {expandedBreadcrumbs.map((item, index) => (
+                            <React.Fragment key={index}>
+                                {index > 0 && <span className="text-slate-400 mx-1">&gt;</span>}
+                                {item.isLast ? (
+                                    <span className="text-slate-600 font-medium">{item.label}</span>
+                                ) : item.path ? (
+                                    <button
+                                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-transparent border-none text-sm transition-colors"
+                                        onClick={() => onBreadcrumbClick(item.path)}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ) : (
+                                    <span className="text-slate-500">{item.label}</span>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+
+                    {/* Content area */}
+                    <div className="flex-1 overflow-auto p-6">
+                        {loading && (
+                            <div className="text-center text-slate-400 py-10">加载中...</div>
+                        )}
+                        {error && (
+                            <div className="text-center text-red-500 py-10">{error}</div>
+                        )}
+                        {!loading && !error && (
+                            <div
+                                ref={contentRef}
+                                className="prose prose-slate max-w-none"
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // ProjectManager component - modal overlay for managing project list
+        function ProjectManager({ isOpen, onClose, projects, onRemove, onAdd, onClearAll, onSelect, error }) {
+            const [inputPath, setInputPath] = useState('');
+
+            if (!isOpen) return null;
+
+            const handleAdd = () => {
+                const trimmed = inputPath.trim();
+                if (!trimmed) return;
+                if (onAdd) {
+                    onAdd(trimmed);
+                }
+                setInputPath('');
+            };
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    handleAdd();
+                }
+            };
+
+            const handleBrowse = () => {
+                // Trigger a hidden directory picker input
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.setAttribute('webkitdirectory', '');
+                input.onchange = (e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                        // Extract folder name from webkitRelativePath (best effort)
+                        const firstPath = files[0].webkitRelativePath || '';
+                        const folderName = firstPath.split('/')[0] || '';
+                        if (folderName) {
+                            setInputPath(folderName);
+                        }
+                    }
+                };
+                input.click();
+            };
+
+            const handleClearAll = () => {
+                if (window.confirm('确定要清空全部项目吗？')) {
+                    if (onClearAll) onClearAll();
+                }
+            };
+
+            const handleOverlayClick = (e) => {
+                if (e.target === e.currentTarget) {
+                    onClose();
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000]" onClick={handleOverlayClick}>
+                <div className="bg-white/90 backdrop-blur-2xl rounded-3xl border border-[#8EABC9] shadow-2xl shadow-slate-300/60 p-6 w-[90%] max-w-[600px] max-h-[80vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-5">
+                        <span className="text-xl font-semibold text-slate-800">项目管理</span>
+                        <button
+                            className="bg-transparent border-none text-slate-500 text-2xl cursor-pointer p-1 px-2 rounded-lg leading-none hover:bg-white/90 hover:text-slate-800 transition-all duration-200"
+                            onClick={onClose}
+                            aria-label="Close project manager"
+                        >
+                            ×
+                        </button>
+                    </div>
+
+                        {/* Project list */}
+                    <div className="flex-1 overflow-y-auto mb-4 min-h-[100px]">
+                            {(!projects || projects.length === 0) ? (
+                                <div className="text-center text-slate-400 text-sm py-8 px-4">
+                                    请添加项目目录以开始
+                                </div>
+                            ) : (
+                                projects.map((project, index) => (
+                                    <div key={project.path || index} className="flex items-center justify-between p-3 px-4 bg-white/70 rounded-xl border border-[#8EABC9] mb-2 transition-all duration-200 hover:bg-white/90">
+                                        <div
+                                            className="flex-1 min-w-0"
+                                            onClick={() => onSelect && onSelect(project.name || project.path.split(/[/\\]/).pop())}
+                                            style={{ cursor: 'pointer' }}
+                                            title="点击切换到此项目"
+                                        >
+                                            <div className="text-sm font-medium text-slate-800 mb-0.5">
+                                                {project.name || project.path.split(/[/\\]/).pop()}
+                                            </div>
+                                            <div className="text-xs text-slate-400 break-all font-mono">
+                                                {project.path}
+                                            </div>
+                                        </div>
+                                        <button
+                                            className="bg-transparent border-none text-slate-400 text-lg cursor-pointer p-1 px-2 rounded-lg ml-2 flex-shrink-0 hover:bg-red-500/15 hover:text-red-600 transition-all duration-200"
+                                            onClick={() => onRemove && onRemove(project.path)}
+                                            aria-label={`Remove project ${project.name || project.path}`}
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Error message */}
+                        {error && (
+                            <div className="text-red-600 text-sm mb-3">{error}</div>
+                        )}
+
+                        {/* Add project area */}
+                        <div className="flex gap-2 mb-3">
+                            <input
+                                className="flex-1 px-3 py-2 rounded-xl border border-[#8EABC9] bg-white/70 backdrop-blur-sm text-slate-700 text-sm outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 placeholder:text-slate-400"
+                                type="text"
+                                placeholder="输入项目路径..."
+                                value={inputPath}
+                                onChange={(e) => setInputPath(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                            />
+                            <button
+                                className="px-4 py-2 rounded-xl bg-blue-500/20 border border-blue-400/40 text-slate-800 text-sm cursor-pointer transition-all duration-200 hover:bg-blue-500/30 hover:shadow-lg hover:shadow-blue-500/20"
+                                onClick={handleAdd}
+                            >
+                                添加
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded-xl border border-[#8EABC9] bg-white/70 text-slate-600 text-sm cursor-pointer transition-all duration-200 hover:bg-white/90"
+                                onClick={handleBrowse}
+                            >
+                                浏览
+                            </button>
+                        </div>
+
+                        {/* Footer with clear all */}
+                        <div className="flex justify-end pt-3 border-t border-[#8EABC9]">
+                            <button
+                                className="px-4 py-2 rounded-xl border border-red-500/40 text-red-600 text-sm cursor-pointer transition-all duration-200 hover:bg-red-500/15"
+                                onClick={handleClearAll}
+                            >
+                                清空全部
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // App component shell
+        function App() {
+            const appData = useMemo(() => loadAppData(), []);
+
+            // Core application state
+            const [selectedProject, setSelectedProject] = useState(null);
+            const [activeView, setActiveView] = useState(() => {
+                try { return sessionStorage.getItem('dashboard_activeView') || 'dag'; } catch(e) { return 'dag'; }
+            });
+            const [activeFilters, setActiveFilters] = useState({
+                plan: true,
+                landing_prompt: true,
+                test_prompt: true,
+            });
+            const [selectedArtifact, setSelectedArtifact] = useState(null);
+            const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [showProjectManager, setShowProjectManager] = useState(false);
+
+            // README browser state
+            const [readmeMode, setReadmeMode] = useState(false);
+            const [readmePath, setReadmePath] = useState('README.md');
+            const [readmeHistory, setReadmeHistory] = useState(['README.md']);
+
+            // Project management state (fetched from API)
+            const [managedProjects, setManagedProjects] = useState([]);
+            const [projectManagerError, setProjectManagerError] = useState('');
+
+            // Fetch project list from API
+            const fetchProjects = useCallback(() => {
+                fetch('/api/projects')
+                    .then(res => res.json())
+                    .then(data => {
+                        setManagedProjects(data.projects || []);
+                    })
+                    .catch(err => {
+                        console.error('Failed to fetch projects:', err);
+                    });
+            }, []);
+
+            // Fetch projects when modal opens
+            useEffect(() => {
+                if (showProjectManager) {
+                    setProjectManagerError('');
+                    fetchProjects();
+                }
+            }, [showProjectManager, fetchProjects]);
+
+            // Handler: add project via POST /api/projects
+            const handleAddProject = useCallback((path) => {
+                setProjectManagerError('');
+                fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path }),
+                })
+                    .then(res => {
+                        if (res.ok) {
+                            // Success: close modal, AutoRefresh will reload the page
+                            setShowProjectManager(false);
+                        } else if (res.status === 422) {
+                            // Project needs initialization
+                            return res.json().then(data => {
+                                if (window.confirm(data.message || '该目录不是合规项目，是否需要初始化？')) {
+                                    // User confirmed: initialize the project
+                                    fetch('/api/projects/initialize', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ path: data.path || path }),
+                                    })
+                                        .then(initRes => {
+                                            if (initRes.ok) {
+                                                setShowProjectManager(false);
+                                            } else {
+                                                return initRes.json().then(errData => {
+                                                    setProjectManagerError(errData.error || '初始化失败');
+                                                });
+                                            }
+                                        })
+                                        .catch(err => {
+                                            setProjectManagerError('网络错误: ' + err.message);
+                                        });
+                                }
+                            });
+                        } else {
+                            return res.json().then(data => {
+                                setProjectManagerError(data.error || '添加失败');
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        setProjectManagerError('网络错误: ' + err.message);
+                    });
+            }, []);
+
+            // Handler: remove project via DELETE /api/projects
+            const handleRemoveProject = useCallback((path) => {
+                fetch('/api/projects', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path }),
+                })
+                    .then(res => {
+                        if (res.ok) {
+                            fetchProjects();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to remove project:', err);
+                    });
+            }, [fetchProjects]);
+
+            // Handler: clear all projects via DELETE /api/projects {clear_all: true}
+            const handleClearAll = useCallback(() => {
+                fetch('/api/projects', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clear_all: true }),
+                })
+                    .then(res => {
+                        if (res.ok) {
+                            fetchProjects();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Failed to clear projects:', err);
+                    });
+            }, [fetchProjects]);
+
+            // Initialize selected project from data
+            useEffect(() => {
+                if (appData && appData.projects) {
+                    const projectNames = Object.keys(appData.projects);
+                    if (projectNames.length > 0 && !selectedProject) {
+                        // Default to the last project (most recently added)
+                        setSelectedProject(projectNames[projectNames.length - 1]);
+                    }
+                }
+            }, [appData]);
+
+            // Set generation timestamp meta tag
+            useEffect(() => {
+                if (appData && appData.generated_at) {
+                    const meta = document.querySelector('meta[name="generation-timestamp"]');
+                    if (meta) {
+                        meta.setAttribute('content', appData.generated_at);
+                    }
+                }
+            }, [appData]);
+
+            // Handle project change (reset filters)
+            const handleProjectChange = useCallback((projectName) => {
+                setSelectedProject(projectName);
+                setActiveFilters({ plan: true, landing_prompt: true, test_prompt: true });
+                setSelectedArtifact(null);
+                setSidebarOpen(false);
+                setReadmeMode(false);
+            }, []);
+
+            // Handle project selection from ProjectManager (switch + close modal)
+            const handleSelectProjectFromManager = useCallback((projectName) => {
+                setSelectedProject(projectName);
+                setActiveFilters({ plan: true, landing_prompt: true, test_prompt: true });
+                setSelectedArtifact(null);
+                setSidebarOpen(false);
+                setShowProjectManager(false);
+                setReadmeMode(false);
+            }, []);
+
+            // Handle artifact selection
+            const handleArtifactSelect = useCallback((artifact) => {
+                setSelectedArtifact(artifact);
+                setSidebarOpen(true);
+            }, []);
+
+            // Handle sidebar close
+            const handleSidebarClose = useCallback(() => {
+                setSidebarOpen(false);
+                setSelectedArtifact(null);
+            }, []);
+
+            // Handle filter toggle
+            const handleFilterToggle = useCallback((filterType) => {
+                setActiveFilters(prev => ({
+                    ...prev,
+                    [filterType]: !prev[filterType],
+                }));
+            }, []);
+
+            // Handle manual refresh
+            const handleRefresh = useCallback(() => {
+                window.location.reload();
+            }, []);
+
+            // Handle entering README mode
+            const handleEnterReadme = useCallback(() => {
+                setReadmeMode(true);
+                setReadmePath('README.md');
+                setReadmeHistory(['README.md']);
+            }, []);
+
+            // Handle exiting README mode (when clicking a view tab)
+            const handleViewChange = useCallback((viewId) => {
+                setActiveView(viewId);
+                setReadmeMode(false);
+                try { sessionStorage.setItem('dashboard_activeView', viewId); } catch(e) {}
+            }, []);
+
+            if (!appData) {
+                return (
+                    <div className="h-screen w-screen grid grid-rows-[auto_1fr]">
+                        <div className="mx-4 mt-4 px-6 py-3 rounded-2xl bg-white/80 backdrop-blur-xl border border-[#8EABC9] shadow-lg shadow-slate-200/50 flex items-center gap-4">
+                            <span className="text-lg font-semibold text-slate-800">Dashboard</span>
+                            <div className="flex gap-3 ml-auto items-center">
+                                <button
+                                    className="px-3 py-1.5 rounded-lg border border-[#8EABC9] bg-white/70 text-slate-500 text-sm cursor-pointer transition-all duration-200 hover:bg-white/95 hover:text-slate-800 hover:shadow-lg hover:-translate-y-px active:translate-y-0 active:shadow-sm"
+                                    onClick={() => setShowProjectManager(true)}
+                                    title="管理项目"
+                                >
+                                    管理项目
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-center">
+                            <div className="text-center text-slate-400">
+                                <p className="text-xl mb-4">请添加项目目录以开始</p>
+                                <button
+                                    className="px-5 py-2.5 rounded-xl bg-blue-500/20 border border-blue-400/40 text-slate-800 text-base cursor-pointer transition-all duration-200 hover:bg-blue-500/30 hover:shadow-lg hover:shadow-blue-500/20"
+                                    onClick={() => setShowProjectManager(true)}
+                                >
+                                    添加项目
+                                </button>
+                            </div>
+                        </div>
+                        <ProjectManager
+                            isOpen={showProjectManager}
+                            onClose={() => setShowProjectManager(false)}
+                            projects={managedProjects}
+                            onRemove={handleRemoveProject}
+                            onAdd={handleAddProject}
+                            onClearAll={handleClearAll}
+                            onSelect={handleSelectProjectFromManager}
+                            error={projectManagerError}
+                        />
+                    </div>
+                );
+            }
+
+            const projectNames = Object.keys(appData.projects || {});
+            const currentProjectData = selectedProject ? appData.projects[selectedProject] : null;
+            const hasNoProjects = projectNames.length === 0;
+
+            const views = [
+                { id: 'dag', label: 'DAG View' },
+                { id: 'swimlane', label: 'Swim Lane' },
+                { id: 'statemachine', label: 'State Machine' },
+                { id: 'hotspots', label: 'Hotspots' },
+            ];
+
+            const filterTypes = [
+                { id: 'plan', label: 'Plan' },
+                { id: 'landing_prompt', label: 'Landing Prompt' },
+                { id: 'test_prompt', label: 'Test Prompt' },
+            ];
+
+            return (
+                <div className="h-screen w-screen grid grid-rows-[auto_1fr] grid-cols-[1fr_auto]" style={{gridTemplateAreas: '"toolbar toolbar" "main sidebar"'}}>
+                    {/* Toolbar */}
+                    <div className="mx-4 mt-4 px-6 py-3 rounded-2xl bg-white/80 backdrop-blur-xl border border-[#8EABC9] shadow-lg shadow-slate-200/50 flex items-center gap-4 z-10" style={{gridArea: 'toolbar'}}>
+                        <span
+                            className="text-lg font-semibold text-slate-800 mr-2 cursor-pointer hover:text-blue-600 transition-colors"
+                            onClick={selectedProject ? handleEnterReadme : undefined}
+                            title={selectedProject ? '查看项目 README' : ''}
+                        >
+                            {selectedProject || 'Dashboard'}
+                        </span>
+
+                        {/* Project selector (visible when 2+ projects) */}
+                        {projectNames.length >= 2 && (
+                            <select
+                                className="px-3 py-1.5 rounded-lg border border-[#8EABC9] bg-white/70 backdrop-blur-sm text-slate-700 text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400/50"
+                                value={selectedProject || ''}
+                                onChange={(e) => handleProjectChange(e.target.value)}
+                            >
+                                {projectNames.map(name => (
+                                    <option key={name} value={name} className="bg-slate-800 text-slate-800">{name}</option>
+                                ))}
+                            </select>
+                        )}
+
+                        {/* View tabs */}
+                        <div className="flex gap-1 ml-4">
+                            {views.map(view => (
+                                <button
+                                    key={view.id}
+                                    className={`px-4 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+                                        !readmeMode && activeView === view.id
+                                            ? 'bg-blue-500/20 border border-blue-400/40 text-blue-700 shadow-lg shadow-blue-500/20'
+                                            : 'border border-transparent text-slate-500 hover:bg-white/90 hover:text-slate-800'
+                                    }`}
+                                    onClick={() => handleViewChange(view.id)}
+                                >
+                                    {view.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Type filters + actions */}
+                        <div className="flex gap-3 ml-auto items-center">
+                            {filterTypes.map(filter => (
+                                <label key={filter.id} className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer hover:text-slate-700 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={activeFilters[filter.id]}
+                                        onChange={() => handleFilterToggle(filter.id)}
+                                        className="accent-blue-500 w-3.5 h-3.5"
+                                    />
+                                    {filter.label}
+                                </label>
+                            ))}
+
+                            {/* Manual refresh button */}
+                            <button
+                                className="px-3 py-1.5 rounded-lg border border-[#8EABC9] bg-white/70 text-slate-500 text-sm cursor-pointer transition-all duration-200 hover:bg-white/95 hover:text-slate-800 hover:shadow-lg hover:-translate-y-px active:translate-y-0 active:shadow-sm"
+                                onClick={handleRefresh}
+                                title="Refresh dashboard"
+                            >
+                                ↻ Refresh
+                            </button>
+
+                            {/* Manage projects button */}
+                            <button
+                                className="px-3 py-1.5 rounded-lg border border-[#8EABC9] bg-white/70 text-slate-500 text-sm cursor-pointer transition-all duration-200 hover:bg-white/95 hover:text-slate-800 hover:shadow-lg hover:-translate-y-px active:translate-y-0 active:shadow-sm"
+                                onClick={() => setShowProjectManager(true)}
+                                title="管理项目"
+                            >
+                                管理项目
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Main content area */}
+                    <div className="p-4 overflow-hidden flex flex-col" style={{gridArea: 'main'}}>
+                        {hasNoProjects && (
+                            <div className="flex items-center justify-center h-full">
+                                <div className="text-center text-slate-400">
+                                    <p className="text-xl mb-4">请添加项目目录以开始</p>
+                                    <button
+                                        className="px-5 py-2.5 rounded-xl bg-blue-500/20 border border-blue-400/40 text-slate-800 text-base cursor-pointer transition-all duration-200 hover:bg-blue-500/30 hover:shadow-lg hover:shadow-blue-500/20"
+                                        onClick={() => setShowProjectManager(true)}
+                                    >
+                                        添加项目
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {!hasNoProjects && readmeMode && (
+                            <ReadmeViewer
+                                currentPath={readmePath}
+                                history={readmeHistory}
+                                onNavigate={(newPath) => {
+                                    setReadmePath(newPath);
+                                    setReadmeHistory(prev => [...prev, newPath]);
+                                }}
+                                onBreadcrumbClick={(path) => {
+                                    const index = readmeHistory.indexOf(path);
+                                    if (index >= 0) {
+                                        setReadmeHistory(prev => prev.slice(0, index + 1));
+                                        setReadmePath(path);
+                                    } else {
+                                        setReadmePath('README.md');
+                                        setReadmeHistory(['README.md']);
+                                    }
+                                }}
+                            />
+                        )}
+                        {!hasNoProjects && !readmeMode && activeView === 'dag' && currentProjectData && (
+                            <div className="flex-1 bg-white/60 backdrop-blur-xl rounded-2xl border border-[#8EABC9] p-4 overflow-hidden flex flex-col">
+                                <DAGView
+                                    artifacts={currentProjectData.artifacts}
+                                    dependencies={currentProjectData.dependencies}
+                                    activeFilters={activeFilters}
+                                    onArtifactSelect={handleArtifactSelect}
+                                />
+                            </div>
+                        )}
+                        {!hasNoProjects && !readmeMode && activeView === 'swimlane' && currentProjectData && (
+                            <div className="flex-1 bg-white/60 backdrop-blur-xl rounded-2xl border border-[#8EABC9] p-4 overflow-auto">
+                                <SwimLaneView
+                                    artifacts={currentProjectData.artifacts || []}
+                                    activeFilters={activeFilters}
+                                    onArtifactSelect={handleArtifactSelect}
+                                />
+                            </div>
+                        )}
+                        {!hasNoProjects && !readmeMode && activeView === 'statemachine' && currentProjectData && (
+                            <div className="flex-1 bg-white/60 backdrop-blur-xl rounded-2xl border border-[#8EABC9] p-4 overflow-auto">
+                                <StateMachineView artifacts={currentProjectData.artifacts || []} />
+                            </div>
+                        )}
+                        {!hasNoProjects && !readmeMode && activeView === 'hotspots' && currentProjectData && (
+                            <div className="flex-1 bg-white/60 backdrop-blur-xl rounded-2xl border border-[#8EABC9] p-4 overflow-auto">
+                                <HotspotPanel
+                                    artifacts={currentProjectData.artifacts || []}
+                                    changeEvents={currentProjectData.change_events || []}
+                                    onArtifactSelect={handleArtifactSelect}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Detail Sidebar */}
+                    <DetailSidebar
+                        artifact={selectedArtifact}
+                        isOpen={sidebarOpen}
+                        onClose={handleSidebarClose}
+                        markdownPreviews={currentProjectData ? (currentProjectData.markdown_previews || {}) : {}}
+                        projectName={selectedProject}
+                    />
+
+                    {/* AutoRefresh poller (renders nothing visible) */}
+                    <AutoRefresh />
+
+                    {/* Project Manager Modal */}
+                    <ProjectManager
+                        isOpen={showProjectManager}
+                        onClose={() => setShowProjectManager(false)}
+                        projects={managedProjects}
+                        onRemove={handleRemoveProject}
+                        onAdd={handleAddProject}
+                        onClearAll={handleClearAll}
+                        onSelect={handleSelectProjectFromManager}
+                        error={projectManagerError}
+                    />
+                </div>
+            );
+        }
+
+        // AutoRefresh polling component
+        // Polls the served HTML file every 3 seconds to detect regeneration.
+        // Disables polling when opened via file:// protocol.
+        // Renders nothing visible.
+        function AutoRefresh() {
+            useEffect(() => {
+                // Do not poll when opened via file:// protocol
+                if (window.location.protocol === 'file:') {
+                    return;
+                }
+
+                // Extract current generation timestamp from meta tag
+                const meta = document.querySelector('meta[name="generation-timestamp"]');
+                if (!meta) return;
+                const currentTimestamp = meta.getAttribute('content') || '';
+
+                const intervalId = setInterval(() => {
+                    fetch(window.location.href)
+                        .then(response => response.text())
+                        .then(html => {
+                            // Parse the fetched HTML to extract the generation-timestamp meta content
+                            const match = html.match(/<meta\s+name=["']generation-timestamp["']\s+content=["']([^"']*)["']/i);
+                            if (match && match[1] && match[1] !== currentTimestamp) {
+                                window.location.reload();
+                            }
+                        })
+                        .catch(() => {
+                            // Suppress errors silently; retry on next interval
+                        });
+                }, 3000);
+
+                // Cleanup interval on unmount
+                return () => clearInterval(intervalId);
+            }, []);
+
+            return null;
+        }
+
+        // Mount the React app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+## Project State — Single Source of Truth
+## Managed by project-state-tracker skill. Do not hand-edit unless you know the schema.
+
+meta:
+  project_name: "Plan_Viewer"
+  created: "2026-05-14T00:00:00Z"
+  last_updated: "2026-05-14T00:00:00Z"
+  total_artifacts: 3
+  total_research: 1
+  total_blockers: 0
+  hotspots: []
+
+artifacts:
+- id: Plan.dashboard-design
+  type: plan
+  path: plan/2026-05-14-dashboard-visualization-design.md
+  status: draft
+  depends_on:
+  - D-001
+  - R-001
+  produces_handoffs: []
+  consumes_handoffs: []
+  last_checked: "2026-05-14T00:00:00Z"
+
+research_findings:
+- id: R-001
+  title: Dashboard 可视化方案调研
+  path: research/R-001-Dashboard-Visualization-Research.md
+  status: reviewed
+
+decisions:
+- id: D-001
+  title: 单文件 HTML + React CDN 方案
+  path: decisions/D-001-single-html-react-cdn.yaml
+  status: accepted
+  based_on:
+  - R-001
+  rejects:
+  - Vite + React 独立项目
+  - Preact + HTM 混合方案
+  - D3.js 纯手写
+  affects:
+  - Plan.dashboard-design
+
+assumptions: []
+
+evidence: []
+
+blockers: []
+
+gates: []
+
+preconditions: []
+
+handoff_contexts: []
+
+change_events:
+- id: CE-001
+  time: "2026-05-14T00:00:00Z"
+  source: agent_brainstorm
+  event_type: skill_run
+  summary: "初始化项目：注册 R-001 调研、D-001 决策、Plan.dashboard-design 设计文档"
+  affected:
+  - R-001
+  - D-001
+  - Plan.dashboard-design
+  transitions:
+  - artifact: R-001
+    from: null
+    to: reviewed
+    reason: "联网调研完成，6 个参考方案已记录"
+  - artifact: D-001
+    from: null
+    to: accepted
+    reason: "用户确认选择方案 1：单文件 HTML + React CDN"
+  - artifact: Plan.dashboard-design
+    from: null
+    to: draft
+    reason: "设计文档完成，包含架构、数据模型、6 个视图、CDN 依赖、文件结构"
+
+snapshots:
+  git_baseline: null
+  file_hashes: {}

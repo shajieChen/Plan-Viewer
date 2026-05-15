@@ -1,0 +1,69 @@
+## Schema definition for status.yaml
+## Used by validate_status.py to check structural correctness.
+
+required_top_level_keys:
+  - meta
+  - artifacts
+  - research_findings
+  - decisions
+  - assumptions
+  - evidence
+  - blockers
+  - gates
+  - preconditions
+  - handoff_contexts
+  - change_events
+  - snapshots
+
+artifact_statuses:
+  - draft
+  - reviewed
+  - approved
+  - ready
+  - blocked
+  - needs_update
+  - invalidated
+  - deprecated
+  - archived
+
+artifact_types:
+  - plan
+  - landing_prompt
+  - test_prompt
+
+meta_required_fields:
+  - project_name
+  - created
+  - last_updated
+  - total_artifacts
+  - total_research
+  - total_blockers
+  - hotspots
+
+artifact_required_fields:
+  - id
+  - type
+  - path
+  - status
+  - depends_on
+
+research_finding_required_fields:
+  - id
+  - path
+  - title
+  - status
+
+blocker_required_fields:
+  - id
+  - title
+  - severity
+  - blocks
+  - status
+
+handoff_context_required_fields:
+  - id
+  - producer
+  - version
+  - status
+  - consumed_by
+  - consumed_status

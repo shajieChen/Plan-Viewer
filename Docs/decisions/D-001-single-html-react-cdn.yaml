@@ -1,0 +1,23 @@
+id: D-001
+title: 单文件 HTML + React CDN 方案
+status: accepted
+date: 2026-05-14
+based_on:
+  - R-001
+rejects:
+  - Vite + React 独立项目（需要 Node 构建步骤，Agent 验证慢）
+  - 混合方案 Preact + HTM（生态小，Agent 不熟悉）
+  - D3.js 纯手写（代码量大，6 个视图维护困难）
+affects:
+  - Plan.dashboard-design
+rationale: |
+  选择单文件 HTML + CDN 引入的原因：
+  1. Agent 改完 Python 脚本跑一次就能验证，开发效率最高
+  2. 和现有 tools/render_status.py 流程完美集成
+  3. React CDN 语法标准、参考资料多
+  4. Mermaid.js 天然支持 DAG 和状态机图
+  5. 零构建步骤，零 Node 依赖
+constraints:
+  - 所有 JS/CSS 通过 CDN 加载或内联，不引入构建工具
+  - 输出为 views/dashboard.html 单文件
+  - Python 侧负责数据序列化和模板注入

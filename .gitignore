@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Testing
+.hypothesis/
+.pytest_cache/
+
+# Node / Desktop app
+plan-viewer-desktop/node_modules/
+plan-viewer-desktop/dist/
+
+# Rust / Tauri build artifacts
+plan-viewer-desktop/src-tauri/target/
+
+# Built binary
+plan-viewer-desktop.exe
+
+# IDE / Editor
+.kiro/

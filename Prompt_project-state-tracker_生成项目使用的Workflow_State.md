@@ -174,6 +174,10 @@ Quality: ✓ N passed / ✗ N failed / ⚠ N warnings
 | Phase 4: Handoff inference | Suggest all candidates | Check existing HCs for staleness only |
 | Phase 5: Quality check | Full project check | Incremental on affected subgraph |
 
+### AUDIT Optimization: Output Hash Comparison
+
+In AUDIT mode, before propagating a change downstream, compare the semantic content hash of the modified file against its previous hash in `snapshots.file_hashes`. If a file was touched (e.g., reformatted, comments added) but its extracted artifact data (ID, depends_on, title) is unchanged, skip downstream propagation for that file. This prevents false cascades from cosmetic edits.
+
 ---
 
 ## Reference Appendix
@@ -259,7 +263,31 @@ snapshots: {git_baseline: string|null, file_hashes: {path: sha256}}
 - Edit status.yaml directly (always go through approved_transitions.json → apply_changes.py)
 - Register artifacts with confidence=low without agent review
 
-### 4F. Output Format
+### 4F. Session Memory (Cross-Invocation Context)
+
+Between invocations, persist key inference results to `status/.cache/session_memory.json` to avoid redundant work:
+
+```json
+{
+  "last_run": "ISO-8601",
+  "mode_used": "AUDIT",
+  "inferred_edges_count": 12,
+  "quality_score": {"passed": 8, "failed": 1, "warnings": 1},
+  "pending_suggestions": [
+    {"type": "dependency", "from": "LP-002", "to": "Plan.dashboard-design", "confidence": "medium"}
+  ],
+  "skipped_files": ["research/R-001-Dashboard-Visualization-Research.md"]
+}
+```
+
+On next invocation in AUDIT mode, read session_memory.json first:
+- Skip files listed in `skipped_files` if their hash hasn't changed
+- Re-present `pending_suggestions` that were not yet approved/rejected
+- Use `quality_score` to prioritize which checks to run first
+
+This file is ephemeral — delete it on INIT mode or when the user says "full check".
+
+### 4G. Output Format
 
 Every invocation must end with this structured report (omit sections with no content, cap "Recommended Next Actions" at 5):
 

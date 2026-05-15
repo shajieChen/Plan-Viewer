@@ -6,16 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "vitest --run",
     "tauri": "tauri"
   },
   "dependencies": {
-    "preact": "^10.22.0",
+    "@tauri-apps/api": "^2.0.0",
     "marked": "^12.0.0",
-    "@tauri-apps/api": "^2.0.0"
+    "preact": "^10.22.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.8.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "@testing-library/preact": "^3.2.4",
+    "fast-check": "^4.8.0",
+    "jsdom": "^29.1.1",
     "vite": "^5.4.0",
-    "@tauri-apps/cli": "^2.0.0"
+    "vitest": "^4.1.6"
   }
 }

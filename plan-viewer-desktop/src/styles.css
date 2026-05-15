@@ -27,7 +27,7 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   border-radius: var(--border-radius);
-  transition: background 0.3s ease, opacity 0.3s ease;
+  transition: background 0.3s ease, opacity 0.3s ease, width 300ms ease, height 300ms ease;
   backdrop-filter: blur(0px);
 }
 
@@ -67,6 +67,17 @@ html, body, #app {
 .title-bar button:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Auto-Shrink toggle */
+.title-bar .auto-shrink-toggle.enabled {
+  color: #10b981;
+  opacity: 0.9;
+}
+
+.title-bar .auto-shrink-toggle.disabled {
+  color: #6b7280;
+  opacity: 0.5;
 }
 
 /* Content area */

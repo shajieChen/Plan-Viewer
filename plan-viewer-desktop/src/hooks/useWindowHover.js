@@ -20,7 +20,7 @@ export function useWindowHover() {
     const handleLeave = () => {
       timeoutRef.current = setTimeout(() => {
         setState('idle');
-      }, 1500);
+      }, 3000);
     };
 
     document.addEventListener('mouseenter', handleEnter);

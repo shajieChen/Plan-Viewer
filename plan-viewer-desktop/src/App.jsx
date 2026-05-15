@@ -5,9 +5,16 @@ import { CompactView } from './components/CompactView.jsx';
 import { DetailPanel } from './components/DetailPanel.jsx';
 import { useProjects } from './hooks/useProjects.js';
 import { useWindowHover } from './hooks/useWindowHover.js';
+import { useWindowAutoShrink } from './hooks/useWindowAutoShrink.js';
 
 export function App() {
   const hoverState = useWindowHover();
+  const [autoShrink, setAutoShrink] = useState(true);
+  const { savedSize, isShrunk } = useWindowAutoShrink({
+    hoverState,
+    enabled: autoShrink,
+    initialSize: { width: 400, height: 300 },
+  });
   const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -32,7 +39,7 @@ export function App() {
 
   return (
     <div class={`app-container ${hoverState}`}>
-      <TitleBar />
+      <TitleBar autoShrink={autoShrink} onToggleAutoShrink={() => setAutoShrink(prev => !prev)} />
 
       {/* Project selector */}
       {projectNames.length > 1 && (

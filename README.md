@@ -58,14 +58,24 @@ python render_dashboard.py --project Q:\PortNotes\UE_Iris
 
 ### 构建桌面版（可选）
 
-前置条件：Node.js v18+、Rust 工具链、npm
+**一键构建**：双击 `build.bat`，脚本会自动检测并安装缺失的依赖（Node.js / Rust 工具链），无需手动准备环境。
 
 ```bash
-build.bat
+build.bat               # 默认：只产出 .exe（速度快、无需联网下载 NSIS）
+build.bat --installer   # 额外打包 NSIS 安装程序（需要联网）
 ```
 
-输出的 `.exe` 文件位于 `plan-viewer-desktop\src-tauri\target\release\`。
-根目录的 `plan-viewer-desktop.exe` 是预编译副本。
+构建产物：
+- 根目录的 `plan-viewer-desktop.exe`（脚本自动从 target 复制）
+- 原始路径：`plan-viewer-desktop\src-tauri\target\release\plan-viewer-desktop.exe`
+- NSIS 安装包（仅 `--installer` 模式）：`plan-viewer-desktop\src-tauri\target\release\bundle\nsis\`
+
+脚本特性：
+- **Node.js 缺失** → 通过 winget 静默安装 LTS 版本
+- **Rust 缺失** → 下载 rustup-init 静默安装 stable 工具链（minimal profile）
+- **toolchain 损坏** → 自动卸载并重装 stable
+- **PATH 注入** → 脚本会话内动态注入 `~/.cargo/bin`，无需重启终端
+- **默认跳过 NSIS bundle** → 避免首次构建时 NSIS 工具下载超时
 
 ## 项目结构
 

@@ -42,7 +42,7 @@ describe('useWindowAutoShrink', () => {
 
   it('should return initial state with savedSize null and isShrunk false', () => {
     const { result } = renderHook(() =>
-      useWindowAutoShrink({ hoverState: 'active', enabled: true, initialSize })
+      useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
     );
 
     expect(result.current.savedSize).toBeNull();
@@ -50,14 +50,14 @@ describe('useWindowAutoShrink', () => {
     expect(result.current.isWaitingRestore).toBe(false);
   });
 
-  it('should shrink window on active → idle transition when enabled', async () => {
+  it('should shrink window on cursor leave (true → false) when enabled', async () => {
     const { result, rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-      { initialProps: { hoverState: 'active' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+      { initialProps: { cursorPresent: true } }
     );
 
-    // Transition to idle
-    rerender({ hoverState: 'idle' });
+    // Cursor leaves
+    rerender({ cursorPresent: false });
 
     // Wait for async operations
     await vi.waitFor(() => {
@@ -73,11 +73,11 @@ describe('useWindowAutoShrink', () => {
 
   it('should NOT shrink when enabled is false', async () => {
     const { rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: false, initialSize }),
-      { initialProps: { hoverState: 'active' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: false, initialSize }),
+      { initialProps: { cursorPresent: true } }
     );
 
-    rerender({ hoverState: 'idle' });
+    rerender({ cursorPresent: false });
 
     // Give time for any async operations
     await new Promise((r) => setTimeout(r, 50));
@@ -89,11 +89,11 @@ describe('useWindowAutoShrink', () => {
     mockInnerSize.mockResolvedValue({ width: 400, height: 300 });
 
     const { result, rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-      { initialProps: { hoverState: 'active' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+      { initialProps: { cursorPresent: true } }
     );
 
-    rerender({ hoverState: 'idle' });
+    rerender({ cursorPresent: false });
 
     // Give time for async operations
     await new Promise((r) => setTimeout(r, 50));
@@ -107,11 +107,11 @@ describe('useWindowAutoShrink', () => {
     mockInnerSize.mockResolvedValue({ width: 350, height: 250 });
 
     const { result, rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-      { initialProps: { hoverState: 'active' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+      { initialProps: { cursorPresent: true } }
     );
 
-    rerender({ hoverState: 'idle' });
+    rerender({ cursorPresent: false });
 
     await new Promise((r) => setTimeout(r, 50));
 
@@ -119,13 +119,13 @@ describe('useWindowAutoShrink', () => {
     expect(result.current.savedSize).toBeNull();
   });
 
-  it('should NOT shrink on idle → idle (no transition)', async () => {
+  it('should NOT shrink on cursor=false → cursor=false (no transition)', async () => {
     const { rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-      { initialProps: { hoverState: 'idle' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+      { initialProps: { cursorPresent: false } }
     );
 
-    rerender({ hoverState: 'idle' });
+    rerender({ cursorPresent: false });
 
     await new Promise((r) => setTimeout(r, 50));
 
@@ -137,11 +137,11 @@ describe('useWindowAutoShrink', () => {
     mockInnerSize.mockRejectedValue(new Error('API unavailable'));
 
     const { result, rerender } = renderHook(
-      ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-      { initialProps: { hoverState: 'active' } }
+      ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+      { initialProps: { cursorPresent: true } }
     );
 
-    rerender({ hoverState: 'idle' });
+    rerender({ cursorPresent: false });
 
     await new Promise((r) => setTimeout(r, 50));
 
@@ -154,9 +154,9 @@ describe('useWindowAutoShrink', () => {
   });
 
   describe('manual resize tracking', () => {
-    it('should register onResized listener when in active state', async () => {
+    it('should register onResized listener while cursor is present', async () => {
       renderHook(() =>
-        useWindowAutoShrink({ hoverState: 'active', enabled: true, initialSize })
+        useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
       );
 
       await new Promise((r) => setTimeout(r, 50));
@@ -165,9 +165,9 @@ describe('useWindowAutoShrink', () => {
       expect(typeof mockOnResized.mock.calls[0][0]).toBe('function');
     });
 
-    it('should NOT register onResized listener when in idle state', async () => {
+    it('should NOT register onResized listener when cursor is absent', async () => {
       renderHook(() =>
-        useWindowAutoShrink({ hoverState: 'idle', enabled: true, initialSize })
+        useWindowAutoShrink({ cursorPresent: false, enabled: true, initialSize })
       );
 
       await new Promise((r) => setTimeout(r, 50));
@@ -183,7 +183,7 @@ describe('useWindowAutoShrink', () => {
       });
 
       const { result } = renderHook(() =>
-        useWindowAutoShrink({ hoverState: 'active', enabled: true, initialSize })
+        useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
       );
 
       await new Promise((r) => setTimeout(r, 50));
@@ -198,19 +198,19 @@ describe('useWindowAutoShrink', () => {
       });
     });
 
-    it('should call unlisten when hoverState changes from active to idle', async () => {
+    it('should call unlisten when cursor leaves', async () => {
       const mockUnlisten = vi.fn();
       mockOnResized.mockResolvedValue(mockUnlisten);
 
       const { rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       await new Promise((r) => setTimeout(r, 50));
 
-      // Transition to idle should trigger cleanup
-      rerender({ hoverState: 'idle' });
+      // Cursor leaves should trigger cleanup
+      rerender({ cursorPresent: false });
 
       await new Promise((r) => setTimeout(r, 50));
 
@@ -225,7 +225,7 @@ describe('useWindowAutoShrink', () => {
       });
 
       const { result } = renderHook(() =>
-        useWindowAutoShrink({ hoverState: 'active', enabled: true, initialSize })
+        useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
       );
 
       await new Promise((r) => setTimeout(r, 50));
@@ -245,19 +245,19 @@ describe('useWindowAutoShrink', () => {
     });
   });
 
-  describe('restore behavior (idle → active)', () => {
+  describe('restore behavior (cursor enters)', () => {
     afterEach(() => {
       vi.useRealTimers();
     });
 
     it('should restore window to savedSize on idle → active transition', async () => {
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
-      // First: shrink (active → idle)
-      rerender({ hoverState: 'idle' });
+      // First: shrink (cursor leaves)
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -271,8 +271,8 @@ describe('useWindowAutoShrink', () => {
       // Switch to fake timers for restore dwell
       vi.useFakeTimers();
 
-      // Then: restore (idle → active)
-      rerender({ hoverState: 'active' });
+      // Then: restore (cursor enters)
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -297,12 +297,12 @@ describe('useWindowAutoShrink', () => {
 
     it('should do nothing on idle → active when no savedSize exists', async () => {
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'idle' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: false } }
       );
 
-      // idle → active without any prior shrink (no savedSize)
-      rerender({ hoverState: 'active' });
+      // cursor enters without any prior shrink (no savedSize)
+      rerender({ cursorPresent: true });
 
       await new Promise((r) => setTimeout(r, 50));
 
@@ -317,12 +317,12 @@ describe('useWindowAutoShrink', () => {
       mockCurrentMonitor.mockResolvedValue({ size: { width: 1920, height: 1080 } });
 
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink first
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -336,7 +336,7 @@ describe('useWindowAutoShrink', () => {
       vi.useFakeTimers();
 
       // Restore
-      rerender({ hoverState: 'active' });
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -365,12 +365,12 @@ describe('useWindowAutoShrink', () => {
       mockCurrentMonitor.mockResolvedValue({ size: { width: 1920, height: 1080 } });
 
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -382,7 +382,7 @@ describe('useWindowAutoShrink', () => {
       vi.useFakeTimers();
 
       // Restore — maxWidth = 1920 - 1400 = 520 (less than 800), maxHeight = 1080 - 100 = 980 (enough)
-      rerender({ hoverState: 'active' });
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -407,12 +407,12 @@ describe('useWindowAutoShrink', () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -424,7 +424,7 @@ describe('useWindowAutoShrink', () => {
       vi.useFakeTimers();
 
       // Restore — monitor call fails, should use savedSize without clamping
-      rerender({ hoverState: 'active' });
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -453,12 +453,12 @@ describe('useWindowAutoShrink', () => {
       mockCurrentMonitor.mockResolvedValue(null);
 
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -470,7 +470,7 @@ describe('useWindowAutoShrink', () => {
       vi.useFakeTimers();
 
       // Restore — monitor is null, should use savedSize directly
-      rerender({ hoverState: 'active' });
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -498,12 +498,12 @@ describe('useWindowAutoShrink', () => {
       mockOuterPosition.mockRejectedValue(new Error('Position unavailable'));
 
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink first
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -515,7 +515,7 @@ describe('useWindowAutoShrink', () => {
       vi.useFakeTimers();
 
       // Restore — outerPosition fails
-      rerender({ hoverState: 'active' });
+      rerender({ cursorPresent: true });
 
       // Advance past dwell delay
       await act(async () => {
@@ -538,24 +538,24 @@ describe('useWindowAutoShrink', () => {
 
     it('should cancel restore if mouse leaves before dwell delay elapses', async () => {
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
       await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
       mockSetSize.mockClear();
 
       vi.useFakeTimers();
 
-      // Enter (starts 2s dwell timer)
-      rerender({ hoverState: 'active' });
+      // Cursor enters (starts 2s dwell timer)
+      rerender({ cursorPresent: true });
       expect(result.current.isWaitingRestore).toBe(true);
 
-      // Leave at 1000ms (before 2s)
+      // Cursor leaves at 1000ms (before 2s)
       vi.advanceTimersByTime(1000);
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
 
       // Advance well past 2000ms
       vi.advanceTimersByTime(5000);
@@ -569,19 +569,19 @@ describe('useWindowAutoShrink', () => {
 
     it('should set isWaitingRestore during dwell wait period', async () => {
       const { result, rerender } = renderHook(
-        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-        { initialProps: { hoverState: 'active' } }
+        ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+        { initialProps: { cursorPresent: true } }
       );
 
       // Shrink
-      rerender({ hoverState: 'idle' });
+      rerender({ cursorPresent: false });
       await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
       mockSetSize.mockClear();
 
       vi.useFakeTimers();
 
-      // Enter — waiting starts
-      rerender({ hoverState: 'active' });
+      // Cursor enters — waiting starts
+      rerender({ cursorPresent: true });
       expect(result.current.isWaitingRestore).toBe(true);
 
       // After dwell completes

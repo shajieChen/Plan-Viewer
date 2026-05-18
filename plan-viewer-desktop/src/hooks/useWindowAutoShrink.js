@@ -13,11 +13,12 @@ import { LogicalSize } from '@tauri-apps/api/window';
  * because the dwell-timer cancellation must respond immediately when the cursor
  * leaves — debouncing would let the dwell timer fire before the leave signal arrives.
  *
- * Asymmetry on cancellation:
+ * Symmetric cancellation:
  * - Enter dwell (restoreTimer) IS cancelled by an immediate leave.
- * - Leave dwell (shrinkTimer) is NOT cancelled by re-entry — option B. After
- *   shrink completes, if the cursor is still inside, a fresh restore dwell
- *   is started so the cycle ends at the user's intended size.
+ * - Leave dwell (shrinkTimer) IS cancelled by an immediate re-entry. If the
+ *   cursor returns to the window before `shrinkDelayMs` elapses, the pending
+ *   shrink is cancelled and the window stays at its current (enlarged) size —
+ *   no shrink-then-restore cycle.
  *
  * @param {{
  *   cursorPresent: boolean,
@@ -65,15 +66,23 @@ export function useWindowAutoShrink({
     const prevCursor = prevCursorRef.current;
     prevCursorRef.current = cursorPresent;
 
-    // Cursor entered: option B — do NOT cancel the shrinkTimer. Just start
-    // a fresh restore dwell if we have a saved size to come back to.
-    if (prevCursor === false && cursorPresent === true && savedSize && !restoreTimerRef.current) {
-      restoreTimerRef.current = setTimeout(() => {
-        restoreTimerRef.current = null;
-        setIsWaitingRestore(false);
-        performRestore();
-      }, restoreDelayMs);
-      setIsWaitingRestore(true);
+    // Cursor entered: cancel any pending leave dwell (symmetric to leave
+    // cancelling enter dwell). Then start a fresh restore dwell if we have a
+    // saved size to come back to.
+    if (prevCursor === false && cursorPresent === true) {
+      if (shrinkTimerRef.current) {
+        clearTimeout(shrinkTimerRef.current);
+        shrinkTimerRef.current = null;
+        setIsWaitingShrink(false);
+      }
+      if (savedSize && !restoreTimerRef.current) {
+        restoreTimerRef.current = setTimeout(() => {
+          restoreTimerRef.current = null;
+          setIsWaitingRestore(false);
+          performRestore();
+        }, restoreDelayMs);
+        setIsWaitingRestore(true);
+      }
     }
 
     // Cursor left: cancel any pending restore (immediate cancellation),
@@ -113,17 +122,8 @@ export function useWindowAutoShrink({
     setIsWaitingShrink(false);
     if (!enabled) return;
     await performShrink();
-    // Option B chain: if the cursor is still inside after shrink completes
-    // and we now have a savedSize, kick off the restore dwell so the user
-    // ends up back at their intended size.
-    if (prevCursorRef.current === true && !restoreTimerRef.current) {
-      restoreTimerRef.current = setTimeout(() => {
-        restoreTimerRef.current = null;
-        setIsWaitingRestore(false);
-        performRestore();
-      }, restoreDelayMs);
-      setIsWaitingRestore(true);
-    }
+    // Symmetric cancel: with the enter edge clearing shrinkTimer, control flow
+    // can only reach here when the cursor is still outside. No chain hookup.
   }
 
   async function performShrink() {

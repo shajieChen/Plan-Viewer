@@ -142,15 +142,15 @@ describe('Feature: symmetric-dwell-delays, Property: shrink fires after leave dw
   }, 30000);
 });
 
-describe('Feature: symmetric-dwell-delays, Property: re-entry does not cancel shrink (option B)', () => {
+describe('Feature: symmetric-dwell-delays, Property: re-entry cancels shrink (option A)', () => {
   /**
-   * **Validates: option B — re-entry does NOT cancel shrinkTimer**
+   * **Validates: option A — re-entry CANCELS shrinkTimer**
    *
-   * Even if the cursor returns inside the window during the leave dwell,
-   * the in-flight shrinkTimer continues and fires when the original
-   * shrinkDelayMs elapses.
+   * If the cursor returns inside the window before the leave dwell elapses,
+   * the in-flight shrinkTimer is cancelled. The window stays at its current
+   * (enlarged) size — no shrink-then-restore cycle.
    */
-  it('cursor returning during leave dwell still results in shrink', async () => {
+  it('cursor returning during leave dwell cancels the pending shrink', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 401, max: 3000 }),
@@ -169,23 +169,23 @@ describe('Feature: symmetric-dwell-delays, Property: re-entry does not cancel sh
 
           vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          expect(result.current.isWaitingShrink).toBe(true);
 
           // Re-enter at some point inside the leave dwell window
           vi.advanceTimersByTime(reentryAt);
           rerender({ cursorPresent: true });
 
-          // Continue advancing until shrink dwell would have fired
-          await advanceAndFlush(1500 - reentryAt);
+          // shrinkTimer is now cancelled
+          expect(result.current.isWaitingShrink).toBe(false);
+
+          // Continue advancing well past when shrinkTimer would have fired
+          await advanceAndFlush(5000);
           vi.useRealTimers();
 
-          // Shrink fired despite the re-entry
-          await vi.waitFor(() => {
-            expect(mockSetSize).toHaveBeenCalledTimes(1);
-          });
-          const sizeArg = mockSetSize.mock.calls[0][0];
-          expect(sizeArg.width).toBe(initialSize.width);
-          expect(sizeArg.height).toBe(initialSize.height);
-          expect(result.current.savedSize).toEqual({ width, height });
+          // Shrink did NOT fire — window stays enlarged
+          expect(mockSetSize).not.toHaveBeenCalled();
+          expect(result.current.savedSize).toBeNull();
+          expect(result.current.isShrunk).toBe(false);
 
           unmount();
         }
@@ -193,66 +193,6 @@ describe('Feature: symmetric-dwell-delays, Property: re-entry does not cancel sh
       { numRuns: 50 }
     );
   }, 30000);
-});
-
-describe('Feature: symmetric-dwell-delays, Property: shrink chains into restore when cursor stays inside', () => {
-  /**
-   * **Validates: option B chain — shrink → restore when cursor remains inside**
-   *
-   * After shrinkTimerCallback's performShrink() completes with the cursor
-   * still inside, a fresh restoreTimer fires after restoreDelayMs and
-   * brings the window back to the saved size.
-   */
-  it('after shrink fires with cursor still inside, restore fires shrinkDelayMs+restoreDelayMs later', async () => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: 401, max: 3000 }),
-        fc.integer({ min: 301, max: 2000 }),
-        fc.integer({ min: 1, max: 1499 }),
-        async (width, height, reentryAt) => {
-          vi.clearAllMocks();
-          mockSetSize.mockResolvedValue(undefined);
-          mockInnerSize.mockResolvedValue({ width, height });
-
-          const { result, rerender, unmount } = renderHook(
-            ({ cursorPresent }) =>
-              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
-            { initialProps: { cursorPresent: true } }
-          );
-
-          vi.useFakeTimers();
-          rerender({ cursorPresent: false });
-          vi.advanceTimersByTime(reentryAt);
-          rerender({ cursorPresent: true });
-
-          // Run leave dwell to completion → triggers shrinkTimerCallback
-          await advanceAndFlush(1500 - reentryAt);
-          // performShrink internally awaits a 100ms timeout before resetting
-          // isResizingRef. Flush that, plus a few microtasks, so the chained
-          // restore-timer setup at the end of shrinkTimerCallback runs.
-          await advanceAndFlush(150);
-          // Now run the chained restore dwell
-          await advanceAndFlush(1500);
-          vi.useRealTimers();
-
-          await vi.waitFor(() => {
-            // shrink + restore = 2 calls
-            expect(mockSetSize).toHaveBeenCalledTimes(2);
-          });
-
-          const shrinkArg = mockSetSize.mock.calls[0][0];
-          const restoreArg = mockSetSize.mock.calls[1][0];
-          expect(shrinkArg.width).toBe(initialSize.width);
-          expect(restoreArg.width).toBe(width);
-          expect(restoreArg.height).toBe(height);
-          expect(result.current.isShrunk).toBe(false);
-
-          unmount();
-        }
-      ),
-      { numRuns: 30 }
-    );
-  }, 60000);
 });
 
 describe('Feature: symmetric-dwell-delays, Property: repeated leave resets shrink dwell', () => {

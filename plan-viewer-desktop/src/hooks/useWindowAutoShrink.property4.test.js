@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/preact';
+import { renderHook, act } from '@testing-library/preact';
 import * as fc from 'fast-check';
 import { useWindowAutoShrink } from './useWindowAutoShrink.js';
 
 // Mock Tauri window API
 const mockSetSize = vi.fn().mockResolvedValue(undefined);
 const mockInnerSize = vi.fn().mockResolvedValue({ width: 800, height: 600 });
+const mockScaleFactor = vi.fn().mockResolvedValue(1);
 const mockOuterPosition = vi.fn().mockResolvedValue({ x: 100, y: 100 });
 const mockOnResized = vi.fn().mockResolvedValue(() => {});
 const mockCurrentMonitor = vi.fn().mockResolvedValue({
@@ -16,6 +17,7 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
     setSize: mockSetSize,
     innerSize: mockInnerSize,
+    scaleFactor: mockScaleFactor,
     outerPosition: mockOuterPosition,
     onResized: mockOnResized,
   }),
@@ -108,7 +110,7 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
     );
   }, 30000);
 
-  it('should not shrink when hoverState transitions active → idle → active quickly (re-entry restores immediately)', async () => {
+  it('should not shrink when hoverState transitions active → idle → active quickly (re-entry restores after dwell)', async () => {
     await fc.assert(
       fc.asyncProperty(
         // Generate random window dimensions (larger than initialSize)
@@ -140,9 +142,21 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
             expect(mockSetSize).toHaveBeenCalled();
           });
 
-          // Immediately transition idle → active (re-entry, restore triggers)
+          // Immediately transition idle → active (re-entry, starts dwell timer)
           mockSetSize.mockClear();
+
+          // Use fake timers to advance past dwell delay
+          vi.useFakeTimers();
           rerender({ hoverState: 'active' });
+
+          // Advance past dwell delay (2000ms)
+          await act(async () => {
+            vi.advanceTimersByTime(2000);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          vi.useRealTimers();
 
           // Wait for restore to complete
           await vi.waitFor(() => {

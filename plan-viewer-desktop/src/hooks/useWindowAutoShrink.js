@@ -3,29 +3,34 @@ import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window';
 import { LogicalSize } from '@tauri-apps/api/window';
 
 /**
- * Auto-shrink the window when hover state transitions from active → idle,
- * and restore it when transitioning from idle → active (after a dwell delay).
- * Tracks manual resize events to keep savedSize up-to-date.
+ * Auto-shrink the window when the cursor leaves, and restore it when the cursor
+ * dwells inside the window for `restoreDelayMs` milliseconds. Tracks manual
+ * resize events to keep savedSize up-to-date.
  *
- * @param {{ hoverState: 'idle' | 'active', enabled: boolean, initialSize: { width: number, height: number }, restoreDelayMs?: number }} options
+ * `cursorPresent` is the instantaneous mouse-in-window boolean from
+ * `useWindowHover`. We deliberately do NOT consume the debounced `opacityState`,
+ * because the dwell-timer cancellation must respond immediately when the cursor
+ * leaves — debouncing would let the dwell timer fire before the leave signal arrives.
+ *
+ * @param {{ cursorPresent: boolean, enabled: boolean, initialSize: { width: number, height: number }, restoreDelayMs?: number }} options
  * @param {number} [options.restoreDelayMs=2000] - Milliseconds the cursor must dwell before restore triggers
  * @returns {{ savedSize: { width: number, height: number } | null, isShrunk: boolean, isWaitingRestore: boolean }}
  */
-export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreDelayMs = 2000 }) {
+export function useWindowAutoShrink({ cursorPresent, enabled, initialSize, restoreDelayMs = 2000 }) {
   const [savedSize, setSavedSize] = useState(null);
   const [isShrunk, setIsShrunk] = useState(false);
   const [isWaitingRestore, setIsWaitingRestore] = useState(false);
-  const prevHoverStateRef = useRef(hoverState);
+  const prevCursorRef = useRef(cursorPresent);
   // Flag to distinguish hook-triggered resizes from user-initiated resizes
   const isResizingRef = useRef(false);
   const restoreTimerRef = useRef(null);
 
   useEffect(() => {
-    const prevState = prevHoverStateRef.current;
-    prevHoverStateRef.current = hoverState;
+    const prevCursor = prevCursorRef.current;
+    prevCursorRef.current = cursorPresent;
 
-    // Restore: idle → active transition when savedSize exists — start dwell timer
-    if (prevState === 'idle' && hoverState === 'active' && savedSize) {
+    // Cursor entered: start dwell timer if there's a saved size to restore
+    if (prevCursor === false && cursorPresent === true && savedSize) {
       restoreTimerRef.current = setTimeout(() => {
         restoreTimerRef.current = null;
         setIsWaitingRestore(false);
@@ -34,20 +39,18 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreD
       setIsWaitingRestore(true);
     }
 
-    // Shrink: active → idle transition
-    if (prevState === 'active' && hoverState === 'idle') {
-      // Cancel pending restore timer if still waiting
+    // Cursor left: cancel any pending restore, then shrink if enabled
+    if (prevCursor === true && cursorPresent === false) {
       if (restoreTimerRef.current) {
         clearTimeout(restoreTimerRef.current);
         restoreTimerRef.current = null;
         setIsWaitingRestore(false);
       }
-      // Perform shrink if enabled
       if (enabled) {
         performShrink();
       }
     }
-  }, [hoverState, enabled, initialSize, restoreDelayMs]);
+  }, [cursorPresent, enabled, initialSize, restoreDelayMs]);
 
   // Cleanup restore timer on unmount
   useEffect(() => {
@@ -153,8 +156,8 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreD
 
   // Listen for window resize events while in active state to track manual resizes (Req 4.1)
   useEffect(() => {
-    // Only track manual resizes when in active state
-    if (hoverState !== 'active') {
+    // Only track manual resizes while the cursor is inside the window
+    if (!cursorPresent) {
       return;
     }
 
@@ -184,13 +187,13 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreD
 
     setupListener();
 
-    // Cleanup: remove listener on unmount or when hoverState changes
+    // Cleanup: remove listener on unmount or when cursorPresent changes
     return () => {
       if (unlisten) {
         unlisten();
       }
     };
-  }, [hoverState]);
+  }, [cursorPresent]);
 
   return { savedSize, isShrunk, isWaitingRestore };
 }

@@ -51,6 +51,15 @@ export function useWindowAutoShrink({
   const isResizingRef = useRef(false);
   const restoreTimerRef = useRef(null);
   const shrinkTimerRef = useRef(null);
+  // Mirror savedSize into a ref so async closures (e.g. the option B chain
+  // inside shrinkTimerCallback that schedules performRestore) always read
+  // the latest value rather than a stale capture from the render that
+  // scheduled the timer.
+  const savedSizeRef = useRef(null);
+
+  useEffect(() => {
+    savedSizeRef.current = savedSize;
+  }, [savedSize]);
 
   useEffect(() => {
     const prevCursor = prevCursorRef.current;
@@ -158,8 +167,12 @@ export function useWindowAutoShrink({
       const win = getCurrentWindow();
       const position = await win.outerPosition();
 
-      let clampedWidth = savedSize.width;
-      let clampedHeight = savedSize.height;
+      const currentSaved = savedSizeRef.current;
+      // Guard against null after manual state changes — without a saved
+      // size there is nothing to restore to.
+      if (!currentSaved) return;
+      let clampedWidth = currentSaved.width;
+      let clampedHeight = currentSaved.height;
 
       // Read screen bounds for clamping (Req 7.3)
       try {

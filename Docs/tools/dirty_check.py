@@ -14,6 +14,11 @@ from pathlib import Path
 TRACKED_DIRS = ["research", "decisions", "plan", "prompts"]
 
 
+def is_external_path(path: str) -> bool:
+    """Check if an artifact path is external (managed by ELP, not file-scannable)."""
+    return path.startswith("external:")
+
+
 def hash_file(path: Path) -> str:
     """SHA-256 hash of file contents."""
     h = hashlib.sha256()

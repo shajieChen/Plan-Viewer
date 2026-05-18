@@ -46,6 +46,14 @@ blocked → draft | reviewed
 Any non-terminal → invalidated | deprecated | archived
 ```
 
+**External executor privilege (Execute-LandingPrompt):**
+
+ELP is a trusted external executor that writes status.yaml directly (or via apply_changes.py when available). Its writes are valid because ELP IS the reviewer+approver+executor for LP artifacts. Specific accommodations:
+
+- ELP may transition LP artifacts: `ready → ready`, `ready → needs_update`, `ready → blocked`, `needs_update → ready`, `blocked → ready`. These collapse the `needs_update → draft → reviewed → approved → ready` chain because ELP performs all intermediate steps atomically.
+- Artifacts with `path: "external:*"` are "agent-managed" — dirty_check and scan_changes skip them. Only ELP (or manual user action) can transition their state.
+- When AUDIT Step 4 encounters a transition authored by `source: Execute-LandingPrompt`, auto-approve at high confidence (ELP is a trusted source).
+
 ---
 
 ## §2 Mode Detection & Routing
@@ -186,9 +194,9 @@ Discard from working memory after step completes.
 | Quality (≤3 artifacts) | — | manual |
 | Quality (>3) | quality_check.py | — |
 
-**DO:** Preserve user fields; record all changes in change_events; `requires_agent_review: true` for <80% confidence; PCs for every LP; tools for mechanical work; sequential IDs.
+**DO:** Preserve user fields; record all changes in change_events; `requires_agent_review: true` for <80% confidence; PCs for every LP; tools for mechanical work; sequential IDs; trust ELP-authored transitions (source: Execute-LandingPrompt) as high-confidence.
 
-**DON'T:** Copy body text into status.yaml; set "ready" without PCs passing; edit user files; propagate beyond graph; treat views/ as truth; auto-bump HC versions; edit status.yaml directly.
+**DON'T:** Copy body text into status.yaml; set "ready" without PCs passing (except ELP which validates PCs during execution); edit user files; propagate beyond graph; treat views/ as truth; auto-bump HC versions (ELP may bump only when content changes); edit status.yaml directly (except ELP in scaffold-only workspaces).
 
 ---
 

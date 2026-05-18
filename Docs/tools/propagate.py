@@ -10,9 +10,12 @@ import yaml
 
 
 def find_artifact_by_path(status: dict, path: str) -> dict | None:
-    """Find an artifact whose path matches."""
+    """Find an artifact whose path matches. Skips external artifacts."""
     for art in status.get("artifacts", []):
-        if art.get("path", "").replace("\\", "/") == path.replace("\\", "/"):
+        art_path = art.get("path", "")
+        if art_path.startswith("external:"):
+            continue
+        if art_path.replace("\\", "/") == path.replace("\\", "/"):
             return art
     for rf in status.get("research_findings", []):
         if rf.get("path", "").replace("\\", "/") == path.replace("\\", "/"):

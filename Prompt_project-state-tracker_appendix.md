@@ -88,6 +88,8 @@
 
 **Type** from directory: research/ → research_finding, decisions/ → decision, plan/ → plan, prompts/landing/ → landing_prompt, prompts/test/ → test_prompt
 
+**External artifacts** (path starts with `external:`): These are managed by Execute-LandingPrompt. Their IDs follow the same resolution order above. During AUDIT, skip file-based checks for external artifacts — trust the last ELP-authored change_event as ground truth.
+
 ### §6B Dependency Inference (4-Step Process)
 
 **Step A — Reference Scan:** Find artifact IDs in body text.
@@ -127,7 +129,9 @@ When LP referenced downstream and no HC exists:
 - Set consumed_by from downstream depends_on
 - Mark `requires_agent_review: true`
 
-Never auto-bump HC versions.
+Never auto-bump HC versions — EXCEPT when Execute-LandingPrompt writes a HC update with actually-changed facts/constraints content (verified by content diff, not just re-execution).
+
+**ELP-authored HCs:** When `source: Execute-LandingPrompt` in the change_event that created/updated an HC, treat the HC as validated (ELP extracted facts from actual execution). Do not mark `requires_agent_review`.
 
 ### §6G status.yaml Schema (Compact)
 

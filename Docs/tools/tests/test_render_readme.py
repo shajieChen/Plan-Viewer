@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from render_status import build_dependency_graph
+from render_status import build_dependency_graph, topological_sort_lps
 
 
 class TestBuildDependencyGraph:
@@ -48,3 +48,41 @@ class TestBuildDependencyGraph:
         status = {"artifacts": [], "research_findings": [], "decisions": []}
         result = build_dependency_graph(status)
         assert "\u65e0\u4f9d\u8d56\u5173\u7cfb" in result  # 无依赖关系
+
+
+class TestTopologicalSortLps:
+    def test_linear_chain(self):
+        """LP-001 -> LP-002 -> LP-003"""
+        artifacts = [
+            {"id": "LP-003", "type": "landing_prompt", "depends_on": ["LP-002"]},
+            {"id": "LP-001", "type": "landing_prompt", "depends_on": ["Plan.x"]},
+            {"id": "LP-002", "type": "landing_prompt", "depends_on": ["LP-001"]},
+        ]
+        result = topological_sort_lps(artifacts)
+        assert result == ["LP-001", "LP-002", "LP-003"]
+
+    def test_no_lps(self):
+        """No landing prompts in artifacts."""
+        artifacts = [
+            {"id": "Plan.x", "type": "plan", "depends_on": []},
+        ]
+        result = topological_sort_lps(artifacts)
+        assert result == []
+
+    def test_single_lp(self):
+        """One LP with no LP dependencies."""
+        artifacts = [
+            {"id": "LP-001", "type": "landing_prompt", "depends_on": ["Plan.x"]},
+        ]
+        result = topological_sort_lps(artifacts)
+        assert result == ["LP-001"]
+
+    def test_cycle_fallback_to_sorted(self):
+        """Cycle between LPs falls back to alphabetical."""
+        artifacts = [
+            {"id": "LP-002", "type": "landing_prompt", "depends_on": ["LP-001"]},
+            {"id": "LP-001", "type": "landing_prompt", "depends_on": ["LP-002"]},
+        ]
+        result = topological_sort_lps(artifacts)
+        # Cycle detected - fallback to sorted by ID
+        assert result == ["LP-001", "LP-002"]

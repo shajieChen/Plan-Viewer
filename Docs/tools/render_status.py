@@ -301,6 +301,46 @@ def build_dependency_graph(status: dict) -> str:
     return "\n".join(lines)
 
 
+def topological_sort_lps(artifacts: list) -> list:
+    """Sort landing_prompt artifacts by depends_on topology.
+
+    Only considers LP-to-LP dependencies. Non-LP dependencies are ignored
+    for ordering purposes. Falls back to alphabetical on cycle detection.
+    """
+    lps = [a for a in artifacts if a.get("type") == "landing_prompt"]
+    if not lps:
+        return []
+
+    lp_ids = {a["id"] for a in lps}
+    # Build graph of LP-to-LP edges only
+    in_degree = {a["id"]: 0 for a in lps}
+    children = {a["id"]: [] for a in lps}
+
+    for a in lps:
+        for dep in a.get("depends_on", []):
+            if dep in lp_ids:
+                in_degree[a["id"]] += 1
+                children[dep].append(a["id"])
+
+    # Kahn's algorithm
+    queue = sorted([nid for nid, deg in in_degree.items() if deg == 0])
+    result = []
+    while queue:
+        node = queue.pop(0)
+        result.append(node)
+        for child in sorted(children[node]):
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+        queue.sort()
+
+    if len(result) != len(lps):
+        # Cycle detected - fallback to alphabetical
+        return sorted(lp_ids)
+
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render status views")
     parser.add_argument("--project", required=True, help="Project root path")

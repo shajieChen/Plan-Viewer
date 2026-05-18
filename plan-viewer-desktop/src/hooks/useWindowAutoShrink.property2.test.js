@@ -1,7 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/preact';
+import { renderHook, act } from '@testing-library/preact';
 import * as fc from 'fast-check';
 import { useWindowAutoShrink } from './useWindowAutoShrink.js';
+
+// Helper: advance fake timers and flush microtasks so the async
+// shrinkTimerCallback / performShrink chain can resolve.
+async function advanceAndFlush(ms) {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
 
 // Mock Tauri window API
 const mockSetSize = vi.fn().mockResolvedValue(undefined);
@@ -62,8 +73,11 @@ describe('Feature: window-auto-shrink, Property 2: No-op shrink when at or below
             { initialProps: { cursorPresent: true } }
           );
 
-          // Cursor leaves (shrink trigger)
+          // Cursor leaves (shrink trigger) — shrinkTimer scheduled, not immediate
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
 
           // Wait for async operations to settle
           // The hook reads innerSize() then checks the condition and returns early

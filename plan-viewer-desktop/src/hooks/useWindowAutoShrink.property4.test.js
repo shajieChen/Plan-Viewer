@@ -3,6 +3,17 @@ import { renderHook, act } from '@testing-library/preact';
 import * as fc from 'fast-check';
 import { useWindowAutoShrink } from './useWindowAutoShrink.js';
 
+// Helper: advance fake timers and flush microtasks so the async
+// shrinkTimerCallback / performShrink chain can resolve.
+async function advanceAndFlush(ms) {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 // Mock Tauri window API
 const mockSetSize = vi.fn().mockResolvedValue(undefined);
 const mockInnerSize = vi.fn().mockResolvedValue({ width: 800, height: 600 });
@@ -106,8 +117,11 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
             { initialProps: { cursorPresent: true } }
           );
 
-          // Cursor leaves → shrink
+          // Cursor leaves → shrink (after 1.5s dwell)
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalled(); });
 
           mockSetSize.mockClear();
@@ -116,9 +130,9 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
           vi.useFakeTimers();
           rerender({ cursorPresent: true });
 
-          // Advance past dwell delay (2000ms)
+          // Advance past dwell delay (1500ms)
           await act(async () => {
-            vi.advanceTimersByTime(2000);
+            vi.advanceTimersByTime(1500);
             await Promise.resolve();
             await Promise.resolve();
             await Promise.resolve();

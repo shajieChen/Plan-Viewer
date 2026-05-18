@@ -9,6 +9,12 @@ meta:
   total_research: 1
   total_blockers: 0
   hotspots: []
+  source_root: "Q:\\Plan_Viewer"
+  scope:
+    - "Q:\\Plan_Viewer"
+    - "Q:\\Plan_Viewer\\Docs"
+  pst_root: "Q:\\Plan_Viewer\\Docs"
+  coding_standards: "Follow existing patterns. Match surrounding file style."
 
 artifacts:
 - id: Plan.dashboard-design

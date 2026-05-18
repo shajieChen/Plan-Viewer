@@ -8,10 +8,10 @@ import { useWindowHover } from './hooks/useWindowHover.js';
 import { useWindowAutoShrink } from './hooks/useWindowAutoShrink.js';
 
 export function App() {
-  const hoverState = useWindowHover();
+  const { opacityState, cursorPresent } = useWindowHover();
   const [autoShrink, setAutoShrink] = useState(true);
-  const { savedSize, isShrunk } = useWindowAutoShrink({
-    hoverState,
+  useWindowAutoShrink({
+    cursorPresent,
     enabled: autoShrink,
     initialSize: { width: 400, height: 300 },
   });
@@ -53,7 +53,7 @@ export function App() {
   };
 
   return (
-    <div class={`app-container ${hoverState}`}>
+    <div class={`app-container ${opacityState}`}>
       <TitleBar autoShrink={autoShrink} onToggleAutoShrink={() => setAutoShrink(prev => !prev)} />
 
       {/* Project selector */}

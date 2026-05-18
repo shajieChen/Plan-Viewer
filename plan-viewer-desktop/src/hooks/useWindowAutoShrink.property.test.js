@@ -8,6 +8,7 @@ const mockSetSize = vi.fn().mockResolvedValue(undefined);
 const mockInnerSize = vi.fn().mockResolvedValue({ width: 800, height: 600 });
 const mockOuterPosition = vi.fn().mockResolvedValue({ x: 0, y: 0 });
 const mockOnResized = vi.fn().mockResolvedValue(() => {});
+const mockScaleFactor = vi.fn().mockResolvedValue(1);
 const mockCurrentMonitor = vi.fn().mockResolvedValue({
   size: { width: 3840, height: 2160 },
 });
@@ -18,6 +19,7 @@ vi.mock('@tauri-apps/api/window', () => ({
     innerSize: mockInnerSize,
     outerPosition: mockOuterPosition,
     onResized: mockOnResized,
+    scaleFactor: mockScaleFactor,
   }),
   currentMonitor: (...args) => mockCurrentMonitor(...args),
   LogicalSize: class LogicalSize {
@@ -87,10 +89,18 @@ describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round tri
           // Clear setSize mock for restore phase
           mockSetSize.mockClear();
 
-          // Transition idle → active (restore)
+          // Use fake timers to advance past dwell delay
+          vi.useFakeTimers();
           rerender({ hoverState: 'active' });
+          await act(async () => {
+            vi.advanceTimersByTime(2000);
+            await Promise.resolve(); // flush microtasks from performRestore
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          vi.useRealTimers();
 
-          // Wait for restore to complete
+          // Then wait for async API calls to complete
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalledTimes(1);
           });
@@ -158,8 +168,9 @@ describe('Feature: window-auto-shrink, Property 4: Manual resize updates Saved_S
 
           // Simulate each resize event in the sequence
           for (const event of resizeEvents) {
-            act(() => {
+            await act(async () => {
               resizeCallback({ payload: { width: event.width, height: event.height } });
+              await Promise.resolve(); // flush scaleFactor() promise in callback
             });
           }
 
@@ -237,8 +248,18 @@ describe('Feature: window-auto-shrink, Property 8: Screen boundary clamping on r
 
           mockSetSize.mockClear();
 
-          // Restore: idle → active (should clamp to screen boundary)
+          // Use fake timers to advance past dwell delay
+          vi.useFakeTimers();
           rerender({ hoverState: 'active' });
+          await act(async () => {
+            vi.advanceTimersByTime(2000);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          vi.useRealTimers();
+
+          // Then wait for async API calls
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalled();
           });
@@ -325,10 +346,18 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
           // Clear setSize mock for restore phase
           mockSetSize.mockClear();
 
-          // Transition idle → active (restore)
+          // Use fake timers to advance past dwell delay
+          vi.useFakeTimers();
           rerender({ hoverState: 'active' });
+          await act(async () => {
+            vi.advanceTimersByTime(2000);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          vi.useRealTimers();
 
-          // Wait for restore to complete
+          // Then wait for async API calls
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalledTimes(1);
           });
@@ -350,6 +379,205 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
         }
       ),
       { numRuns: 100 }
+    );
+  }, 30000);
+});
+
+describe('Feature: restore-dwell-delay, Property: Dwell cancellation on early leave', () => {
+  const initialSize = { width: 400, height: 300 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetSize.mockResolvedValue(undefined);
+    mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+    mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+    mockOnResized.mockResolvedValue(() => {});
+  });
+
+  /**
+   * For any random dwell time t ∈ (0, 2000ms), if the mouse leaves
+   * before t reaches 2000ms, the window should NOT restore.
+   */
+  it('window remains shrunk when mouse leaves before dwell delay completes', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 401, max: 2000 }),
+        fc.integer({ min: 301, max: 1500 }),
+        fc.integer({ min: 1, max: 1999 }),
+        async (width, height, dwellTime) => {
+          vi.clearAllMocks();
+          mockSetSize.mockResolvedValue(undefined);
+          mockInnerSize.mockResolvedValue({ width, height });
+          mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+          mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+          mockOnResized.mockResolvedValue(() => {});
+
+          const { result, rerender, unmount } = renderHook(
+            ({ hoverState }) =>
+              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
+            { initialProps: { hoverState: 'active' } }
+          );
+
+          // Shrink first
+          rerender({ hoverState: 'idle' });
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+          expect(result.current.isShrunk).toBe(true);
+          mockSetSize.mockClear();
+
+          // Use fake timers for dwell
+          vi.useFakeTimers();
+          rerender({ hoverState: 'active' });
+          expect(result.current.isWaitingRestore).toBe(true);
+
+          // Advance by dwellTime (< 2000ms)
+          vi.advanceTimersByTime(dwellTime);
+
+          // Leave before dwell completes
+          rerender({ hoverState: 'idle' });
+
+          // Advance well past 2000ms
+          vi.advanceTimersByTime(5000);
+          vi.useRealTimers();
+
+          // Should NOT have restored
+          expect(mockSetSize).not.toHaveBeenCalled();
+          expect(result.current.isShrunk).toBe(true);
+          expect(result.current.isWaitingRestore).toBe(false);
+
+          unmount();
+        }
+      ),
+      { numRuns: 100 }
+    );
+  }, 30000);
+});
+
+describe('Feature: restore-dwell-delay, Property: Restore triggers after full dwell', () => {
+  const initialSize = { width: 400, height: 300 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetSize.mockResolvedValue(undefined);
+    mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+    mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+    mockOnResized.mockResolvedValue(() => {});
+  });
+
+  it('window restores to savedSize after dwell delay completes', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 401, max: 3000 }),
+        fc.integer({ min: 301, max: 2000 }),
+        async (width, height) => {
+          vi.clearAllMocks();
+          mockSetSize.mockResolvedValue(undefined);
+          mockInnerSize.mockResolvedValue({ width, height });
+          mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+          mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+          mockOnResized.mockResolvedValue(() => {});
+
+          const { result, rerender, unmount } = renderHook(
+            ({ hoverState }) =>
+              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
+            { initialProps: { hoverState: 'active' } }
+          );
+
+          // Shrink
+          rerender({ hoverState: 'idle' });
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+          expect(result.current.isShrunk).toBe(true);
+          expect(result.current.savedSize).toEqual({ width, height });
+          mockSetSize.mockClear();
+
+          // Use fake timers for dwell
+          vi.useFakeTimers();
+          rerender({ hoverState: 'active' });
+          expect(result.current.isWaitingRestore).toBe(true);
+
+          // Advance full 2000ms
+          await act(async () => {
+            vi.advanceTimersByTime(2000);
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
+          });
+          vi.useRealTimers();
+
+          // Restore should fire
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+
+          const restoreArg = mockSetSize.mock.calls[0][0];
+          expect(restoreArg.width).toBe(width);
+          expect(restoreArg.height).toBe(height);
+          expect(result.current.isShrunk).toBe(false);
+          expect(result.current.isWaitingRestore).toBe(false);
+
+          unmount();
+        }
+      ),
+      { numRuns: 100 }
+    );
+  }, 30000);
+});
+
+describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never trigger restore', () => {
+  const initialSize = { width: 400, height: 300 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetSize.mockResolvedValue(undefined);
+    mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+    mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+    mockOnResized.mockResolvedValue(() => {});
+  });
+
+  it('N rapid enter-leave cycles (each < 2s) never trigger restore', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 2, max: 10 }),
+        fc.integer({ min: 1, max: 1999 }),
+        async (numCycles, dwellTime) => {
+          vi.clearAllMocks();
+          mockSetSize.mockResolvedValue(undefined);
+          mockInnerSize.mockResolvedValue({ width: 800, height: 600 });
+          mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+          mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+          mockOnResized.mockResolvedValue(() => {});
+
+          const { result, rerender, unmount } = renderHook(
+            ({ hoverState }) =>
+              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
+            { initialProps: { hoverState: 'active' } }
+          );
+
+          // Shrink first
+          rerender({ hoverState: 'idle' });
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+          expect(result.current.isShrunk).toBe(true);
+          mockSetSize.mockClear();
+
+          vi.useFakeTimers();
+
+          // Rapid enter-leave cycles
+          for (let i = 0; i < numCycles; i++) {
+            rerender({ hoverState: 'active' });
+            vi.advanceTimersByTime(dwellTime);
+            rerender({ hoverState: 'idle' });
+            vi.advanceTimersByTime(100);
+          }
+
+          // Advance well past any pending timer
+          vi.advanceTimersByTime(10000);
+          vi.useRealTimers();
+
+          // No restore should have been called
+          expect(mockSetSize).not.toHaveBeenCalled();
+          expect(result.current.isShrunk).toBe(true);
+
+          unmount();
+        }
+      ),
+      { numRuns: 50 }
     );
   }, 30000);
 });

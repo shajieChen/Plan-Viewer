@@ -40,6 +40,16 @@ describe('useWindowAutoShrink', () => {
     mockOnResized.mockResolvedValue(() => {});
   });
 
+  // Helper: advance fake timers and flush microtasks so async performShrink/Restore can resolve.
+  async function advanceAndFlush(ms) {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+      // Flush a couple of microtask rounds for the awaited promises in performShrink/Restore
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
   it('should return initial state with savedSize null and isShrunk false', () => {
     const { result } = renderHook(() =>
       useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
@@ -50,16 +60,22 @@ describe('useWindowAutoShrink', () => {
     expect(result.current.isWaitingRestore).toBe(false);
   });
 
-  it('should shrink window on cursor leave (true → false) when enabled', async () => {
+  it('should shrink window after shrink dwell delay when cursor leaves', async () => {
+    vi.useFakeTimers();
     const { result, rerender } = renderHook(
       ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
       { initialProps: { cursorPresent: true } }
     );
 
-    // Cursor leaves
+    // Cursor leaves — shrink does NOT fire yet
     rerender({ cursorPresent: false });
+    expect(mockSetSize).not.toHaveBeenCalled();
+    expect(result.current.isWaitingShrink).toBe(true);
 
-    // Wait for async operations
+    // Advance past shrink dwell
+    await advanceAndFlush(1500);
+    vi.useRealTimers();
+
     await vi.waitFor(() => {
       expect(mockSetSize).toHaveBeenCalledTimes(1);
     });
@@ -93,7 +109,10 @@ describe('useWindowAutoShrink', () => {
       { initialProps: { cursorPresent: true } }
     );
 
+    vi.useFakeTimers();
     rerender({ cursorPresent: false });
+    await advanceAndFlush(1500);
+    vi.useRealTimers();
 
     // Give time for async operations
     await new Promise((r) => setTimeout(r, 50));
@@ -111,7 +130,10 @@ describe('useWindowAutoShrink', () => {
       { initialProps: { cursorPresent: true } }
     );
 
+    vi.useFakeTimers();
     rerender({ cursorPresent: false });
+    await advanceAndFlush(1500);
+    vi.useRealTimers();
 
     await new Promise((r) => setTimeout(r, 50));
 
@@ -141,7 +163,10 @@ describe('useWindowAutoShrink', () => {
       { initialProps: { cursorPresent: true } }
     );
 
+    vi.useFakeTimers();
     rerender({ cursorPresent: false });
+    await advanceAndFlush(1500);
+    vi.useRealTimers();
 
     await new Promise((r) => setTimeout(r, 50));
 
@@ -257,7 +282,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // First: shrink (cursor leaves)
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -276,7 +304,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -322,7 +350,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink first
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -340,7 +371,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -370,7 +401,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -386,7 +420,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -412,7 +446,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -428,7 +465,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -458,7 +495,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -474,7 +514,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -503,7 +543,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink first
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -519,7 +562,7 @@ describe('useWindowAutoShrink', () => {
 
       // Advance past dwell delay
       await act(async () => {
-        vi.advanceTimersByTime(2000);
+        vi.advanceTimersByTime(1500);
       });
 
       // Switch back for async assertions
@@ -543,28 +586,36 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
       await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
       mockSetSize.mockClear();
 
       vi.useFakeTimers();
 
-      // Cursor enters (starts 2s dwell timer)
+      // Cursor enters (starts 1.5s restore dwell timer)
       rerender({ cursorPresent: true });
       expect(result.current.isWaitingRestore).toBe(true);
 
-      // Cursor leaves at 1000ms (before 2s)
-      vi.advanceTimersByTime(1000);
+      // Cursor leaves at 800ms (before 1.5s restore dwell)
+      vi.advanceTimersByTime(800);
       rerender({ cursorPresent: false });
 
-      // Advance well past 2000ms
-      vi.advanceTimersByTime(5000);
+      // Restore was cancelled immediately
+      expect(result.current.isWaitingRestore).toBe(false);
+      // Shrink dwell is now active
+      expect(result.current.isWaitingShrink).toBe(true);
+
+      // Advance to just before shrink dwell completes (total elapsed since leave: 1499ms)
+      vi.advanceTimersByTime(1499);
       vi.useRealTimers();
 
-      // Restore should NOT have fired
+      // Restore should NOT have fired (it was cancelled)
+      // Shrink also has not fired yet (still inside dwell)
       expect(mockSetSize).not.toHaveBeenCalled();
       expect(result.current.isShrunk).toBe(true);
-      expect(result.current.isWaitingRestore).toBe(false);
     });
 
     it('should set isWaitingRestore during dwell wait period', async () => {
@@ -574,7 +625,10 @@ describe('useWindowAutoShrink', () => {
       );
 
       // Shrink
+      vi.useFakeTimers();
       rerender({ cursorPresent: false });
+      await advanceAndFlush(1500);
+      vi.useRealTimers();
       await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
       mockSetSize.mockClear();
 
@@ -585,7 +639,7 @@ describe('useWindowAutoShrink', () => {
       expect(result.current.isWaitingRestore).toBe(true);
 
       // After dwell completes
-      await act(async () => { vi.advanceTimersByTime(2000); });
+      await act(async () => { vi.advanceTimersByTime(1500); });
       vi.useRealTimers();
 
       await vi.waitFor(() => {

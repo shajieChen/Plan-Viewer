@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/preact';
 import { useWindowAutoShrink } from './useWindowAutoShrink.js';
 
 // Mock Tauri window API
 const mockSetSize = vi.fn().mockResolvedValue(undefined);
 const mockInnerSize = vi.fn().mockResolvedValue({ width: 800, height: 600 });
+const mockScaleFactor = vi.fn().mockResolvedValue(1);
 const mockOuterPosition = vi.fn().mockResolvedValue({ x: 100, y: 100 });
 const mockOnResized = vi.fn().mockResolvedValue(() => {});
 const mockCurrentMonitor = vi.fn().mockResolvedValue({
@@ -15,6 +16,7 @@ vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
     setSize: mockSetSize,
     innerSize: mockInnerSize,
+    scaleFactor: mockScaleFactor,
     outerPosition: mockOuterPosition,
     onResized: mockOnResized,
   }),
@@ -45,6 +47,7 @@ describe('useWindowAutoShrink', () => {
 
     expect(result.current.savedSize).toBeNull();
     expect(result.current.isShrunk).toBe(false);
+    expect(result.current.isWaitingRestore).toBe(false);
   });
 
   it('should shrink window on active → idle transition when enabled', async () => {
@@ -190,7 +193,9 @@ describe('useWindowAutoShrink', () => {
         resizeCallback({ payload: { width: 900, height: 700 } });
       });
 
-      expect(result.current.savedSize).toEqual({ width: 900, height: 700 });
+      await vi.waitFor(() => {
+        expect(result.current.savedSize).toEqual({ width: 900, height: 700 });
+      });
     });
 
     it('should call unlisten when hoverState changes from active to idle', async () => {
@@ -234,11 +239,17 @@ describe('useWindowAutoShrink', () => {
       });
 
       // savedSize should reflect the most recent resize
-      expect(result.current.savedSize).toEqual({ width: 1000, height: 800 });
+      await vi.waitFor(() => {
+        expect(result.current.savedSize).toEqual({ width: 1000, height: 800 });
+      });
     });
   });
 
   describe('restore behavior (idle → active)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('should restore window to savedSize on idle → active transition', async () => {
       const { result, rerender } = renderHook(
         ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
@@ -257,8 +268,19 @@ describe('useWindowAutoShrink', () => {
 
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Then: restore (idle → active)
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -267,7 +289,10 @@ describe('useWindowAutoShrink', () => {
       const restoreArg = mockSetSize.mock.calls[0][0];
       expect(restoreArg.width).toBe(800);
       expect(restoreArg.height).toBe(600);
-      expect(result.current.isShrunk).toBe(false);
+
+      await vi.waitFor(() => {
+        expect(result.current.isShrunk).toBe(false);
+      });
     });
 
     it('should do nothing on idle → active when no savedSize exists', async () => {
@@ -307,8 +332,19 @@ describe('useWindowAutoShrink', () => {
       expect(result.current.savedSize).toEqual({ width: 800, height: 600 });
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Restore
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -342,8 +378,19 @@ describe('useWindowAutoShrink', () => {
 
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Restore — maxWidth = 1920 - 1400 = 520 (less than 800), maxHeight = 1080 - 100 = 980 (enough)
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -373,8 +420,19 @@ describe('useWindowAutoShrink', () => {
 
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Restore — monitor call fails, should use savedSize without clamping
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -383,7 +441,10 @@ describe('useWindowAutoShrink', () => {
       const restoreArg = mockSetSize.mock.calls[0][0];
       expect(restoreArg.width).toBe(800);
       expect(restoreArg.height).toBe(600);
-      expect(result.current.isShrunk).toBe(false);
+
+      await vi.waitFor(() => {
+        expect(result.current.isShrunk).toBe(false);
+      });
 
       consoleSpy.mockRestore();
     });
@@ -405,8 +466,19 @@ describe('useWindowAutoShrink', () => {
 
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Restore — monitor is null, should use savedSize directly
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(mockSetSize).toHaveBeenCalledTimes(1);
@@ -415,7 +487,10 @@ describe('useWindowAutoShrink', () => {
       const restoreArg = mockSetSize.mock.calls[0][0];
       expect(restoreArg.width).toBe(800);
       expect(restoreArg.height).toBe(600);
-      expect(result.current.isShrunk).toBe(false);
+
+      await vi.waitFor(() => {
+        expect(result.current.isShrunk).toBe(false);
+      });
     });
 
     it('should handle restore API errors gracefully', async () => {
@@ -436,8 +511,19 @@ describe('useWindowAutoShrink', () => {
 
       mockSetSize.mockClear();
 
+      // Switch to fake timers for restore dwell
+      vi.useFakeTimers();
+
       // Restore — outerPosition fails
       rerender({ hoverState: 'active' });
+
+      // Advance past dwell delay
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Switch back for async assertions
+      vi.useRealTimers();
 
       await new Promise((r) => setTimeout(r, 50));
 
@@ -448,6 +534,63 @@ describe('useWindowAutoShrink', () => {
       expect(consoleSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
+    });
+
+    it('should cancel restore if mouse leaves before dwell delay elapses', async () => {
+      const { result, rerender } = renderHook(
+        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
+        { initialProps: { hoverState: 'active' } }
+      );
+
+      // Shrink
+      rerender({ hoverState: 'idle' });
+      await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+      mockSetSize.mockClear();
+
+      vi.useFakeTimers();
+
+      // Enter (starts 2s dwell timer)
+      rerender({ hoverState: 'active' });
+      expect(result.current.isWaitingRestore).toBe(true);
+
+      // Leave at 1000ms (before 2s)
+      vi.advanceTimersByTime(1000);
+      rerender({ hoverState: 'idle' });
+
+      // Advance well past 2000ms
+      vi.advanceTimersByTime(5000);
+      vi.useRealTimers();
+
+      // Restore should NOT have fired
+      expect(mockSetSize).not.toHaveBeenCalled();
+      expect(result.current.isShrunk).toBe(true);
+      expect(result.current.isWaitingRestore).toBe(false);
+    });
+
+    it('should set isWaitingRestore during dwell wait period', async () => {
+      const { result, rerender } = renderHook(
+        ({ hoverState }) => useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
+        { initialProps: { hoverState: 'active' } }
+      );
+
+      // Shrink
+      rerender({ hoverState: 'idle' });
+      await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
+      mockSetSize.mockClear();
+
+      vi.useFakeTimers();
+
+      // Enter — waiting starts
+      rerender({ hoverState: 'active' });
+      expect(result.current.isWaitingRestore).toBe(true);
+
+      // After dwell completes
+      await act(async () => { vi.advanceTimersByTime(2000); });
+      vi.useRealTimers();
+
+      await vi.waitFor(() => {
+        expect(result.current.isWaitingRestore).toBe(false);
+      });
     });
   });
 });

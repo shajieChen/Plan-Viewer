@@ -1,12 +1,17 @@
 ---
 name: Execute-LandingPrompt
-description: "Execute exactly one LandingPrompt file from a supported project (RB_Net_Monitor or UE_Iris) OR from the current workspace's prompts/landing/ directory, then auto-sync execution results back to the workspace's status/status.yaml (PST回流). Use when the user says Skill + corresponding file, Skill + 对应文件, execute LandingPrompt, or asks to land one LandingPrompt step."
+description: "Execute exactly one LandingPrompt file from any project, then auto-sync execution results back to the project's status/status.yaml (PST回流). Project context (source root, coding standards, LP sequence) is read from the LandingPrompt directory's README.md. Use when the user says Skill + corresponding file, Skill + 对应文件, execute LandingPrompt, or asks to land one LandingPrompt step."
 ---
 
 # Execute LandingPrompt
 
 ## Invocation
 
+```text
+Skill Execute-LandingPrompt + <path-to-any-landing-prompt-file>.md
+```
+
+Examples:
 ```text
 Skill Execute-LandingPrompt + Q:\PortNotes\RB_Net_Monitor\LandingPrompt\CL_SubStep_Verify.md
 Skill Execute-LandingPrompt + Q:\PortNotes\UE_Iris\LandingPrompt\Phase3-DescriptorRegistry.md
@@ -17,23 +22,58 @@ If the user provides a folder, read that folder's `README.md` and ask which sing
 
 ---
 
-## Project Detection
+## § Path Derivation
 
-| Path prefix | Project | Source root | Prompt root |
-|---|---|---|---|
-| `Q:\PortNotes\RB_Net_Monitor\` | Net Monitor | `Q:\1.55.0_Net_Monitor\Source` | `Q:\PortNotes\RB_Net_Monitor\LandingPrompt` |
-| `Q:\PortNotes\UE_Iris\` | UE_Iris (Replication) | `Q:\1.47\Source` | `Q:\PortNotes\UE_Iris\LandingPrompt` |
-| `prompts/landing/` (workspace-local) | Local PST | workspace root | `<workspace>/prompts/landing/` |
+Given user input `Skill Execute-LandingPrompt + <lp_file_path>`:
 
-For workspace-local LPs, the source root is the workspace root itself.
+```
+lp_dir       = dirname(lp_file_path)                           # LP 文件所在目录
+readme_path  = lp_dir / README.md                              # README 位置
+source_root  = README.front_matter.source_root                 # 必填，从 README 读取
+scope        = README.front_matter.scope ?? [source_root, dirname(lp_dir)]
+pst_root     = README.front_matter.pst_root ?? dirname(lp_dir)
+```
+
+**If `readme_path` does not exist:** Output error and STOP. Do not execute any LP without a README.
 
 ---
 
-## Scope
+## § README Protocol
 
-- **Net Monitor**: `Q:\PortNotes\RB_Net_Monitor` + `Q:\1.55.0_Net_Monitor\Source`
-- **UE_Iris**: `Q:\PortNotes\UE_Iris` + `Q:\1.47\Source` (primary target: `Core\RainbowEngine\Engine\System\Network\ReplicationSystem\`)
-- **Local PST**: workspace root (LP files in `prompts/landing/`, source in workspace)
+Every LandingPrompt directory MUST contain a `README.md` with this structure:
+
+### YAML Front-matter (machine-readable config)
+
+```yaml
+---
+source_root: "<absolute path>"     # REQUIRED: source code root directory
+scope:                             # Optional: allowed file paths for ELP operations
+  - "<path1>"                      # Default = [source_root, dirname(lp_dir)]
+  - "<path2>"
+pst_root: "<absolute path>"        # Optional: PST writeback target directory
+                                   # Default = dirname(lp_dir)
+                                   # ELP writes to <pst_root>/status/status.yaml
+---
+```
+
+### Markdown Body (human-readable + ELP-parsed sections)
+
+| Section heading | Purpose | Required |
+|---|---|---|
+| `## LP 序列` | Declares LP execution order; ELP uses this to determine "next prompt" | Yes |
+| `## Coding Standards` | Project coding conventions; ELP follows these when modifying code | No |
+
+Remaining body content is free-form for human readers.
+
+---
+
+## § Coding Standards Resolution
+
+ELP does NOT contain any built-in coding standards. Resolution priority:
+
+1. README.md `## Coding Standards` section → if present, follow those rules
+2. If README has no such section → follow workspace `.kiro/steering/` rules (if any)
+3. If neither exists → follow general best practices
 
 ---
 
@@ -41,21 +81,24 @@ For workspace-local LPs, the source root is the workspace root itself.
 
 ### Phase A — Execute (Steps 1–8)
 
-1. Read `LandingPrompt\README.md` for the detected project.
+1. Derive `lp_dir` from LP file path. Read `lp_dir/README.md`.
+   - Parse YAML front-matter → extract `source_root`, `scope`, `pst_root`
+   - Parse body → extract LP sequence, Coding Standards
+   - If README.md missing → error and STOP
 2. Read the user-specified current LandingPrompt file.
 3. Read prerequisite prompts only when needed for safe execution.
 4. Execute only the current prompt (summarize goal/mode/allowed files/gates first).
 5. Run relevant verification; compare against acceptance criteria.
 6. Mark as `completed` / `partial` / `blocked`.
-7. Read the next prompt for handoff context — do NOT execute it.
+7. Read the next prompt (determined from LP sequence) for handoff context — do NOT execute it.
 8. Produce the handoff section (Markdown).
 
 ### Phase B — PST 回流 (Steps 9–12)
 
-9. Detect `status/status.yaml` in workspace root. If missing → scaffold (see § PST 回流).
+9. Check if `<pst_root>/status/status.yaml` exists. If missing → scaffold (see § PST 回流).
 10. Resolve LP artifact ID (see § ID Resolution).
-11. Write/update: LP artifact entry + handoff_context + change_event via `approved_transitions.json → apply_changes.py` pipeline when tools exist, or direct write when scaffold-only.
-12. Set LP artifact status per § Status Mapping.
+11. Write/update: LP artifact entry + handoff_context + change_event.
+12. Set LP artifact status (see § Status Mapping).
 
 Phase B is best-effort. If YAML write fails, report the error in the handoff footer but do NOT alter Phase A results.
 
@@ -66,67 +109,10 @@ Phase B is best-effort. If YAML write fails, report the error in the handoff foo
 - **Single Prompt Rule**: Do not execute sibling prompts, do not widen scope, do not start the next prompt. If blocked, hand off the blocker.
 - **Verify-only prompts**: Do not modify source files.
 - **Missing anchors**: Stop and report, do not guess nonexistent functions/paths.
-- **Allowed files only**: Keep edits inside the current prompt's file list.
+- **Allowed files only**: Keep edits inside the current prompt's file list AND within `scope`.
 - **Preserve `禁止修改` / `不应改动` rules**.
 - **`confirmed` = reusable facts; `unresolved` = gates to verify first**.
 - **If an unresolved gate fails**: Stop, write handoff note, do not force code.
-
----
-
-## Coding Standards
-
-### Baseline
-
-All code written by this skill MUST follow the workspace steering rules (`.kiro/steering/rules.md`), which are always loaded into context. Key points already covered there:
-
-- 无注释、函数体内无空行、显式类型、变量必须初始化
-- 容器/智能指针使用引擎 Utilities 实现（`DynamicArray` 优先）
-- 内存分配使用引擎接口 + MemLabel 标签
-- 静态对象使用 `RuntimeStatic<T>` + `s_` 前缀 + `Get` 暴露
-- CRLF、4 空格缩进、连续行局部对齐
-- 禁止 `std::vector/map/shared_ptr/unique_ptr/new/delete/malloc/free`
-
-**Do not repeat these rules in code review — they are enforced by steering.**
-
-### UE_Iris — ReplicationSystem 特有规则
-
-These are the rules SPECIFIC to the Replication System that go beyond the general steering:
-
-| Rule | Correct | Forbidden |
-|------|---------|-----------|
-| Macro header | `NetReplication.h` | IrisReplication.h |
-| Macro prefix | `NET_REPLICATED_STRUCT`, `NET_FIELD`, `NET_ARRAY_FIELD` | IRIS_* |
-| Generated suffix | `.net.generated.h` / `.net.generated.cpp` | .iris.generated.* |
-| Tool directory | `Source/Tools/NetCodeGen/` | IrisCodeGen |
-| Comments | "replication" / "net replication" | "Iris replication" |
-| "Iris" in source | NEVER | Only in `PortNotes/UE_Iris/Research/` |
-
-Additional ReplicationSystem conventions:
-- Namespaces: `namespace Rainbow { ... } // namespace Rainbow`
-- DLL export: `EXPORT_ENGINEMODULE` on classes crossing DLL boundaries (not on templates).
-- Naming: PascalCase types/methods, `m_PascalCase` members, `k` prefix constants, `UPPER_SNAKE` macros.
-- Enum: `enum class` + explicit underlying type + `ENUM_FLAGS_8` for flags + `k` prefix values.
-- Reflection: `DECLARE_REFLECT()`, `DECLARE_CLASS()`, `DECLARE_OBJECT_SERIALIZE()`.
-- Object ctors: first param `MemLabelId label`.
-- Threading: `ASSERT_RUNNING_ON_MAIN_THREAD` for gameplay state writes.
-- Serialization: Network = `NetSerialize`/`NetDeserialize`; Object = `Transfer(TransferFunction&)`. Never mix.
-- Dependency: `Core/RainbowEngine <- SandboxEngine <- SandboxGame <- MiniGame`. No upward deps.
-
-### Net Monitor — Project Standards
-
-Follow existing code style in `Q:\1.55.0_Net_Monitor\Source`. Match surrounding file style.
-
----
-
-## LandingPrompt Sequence (Net Monitor fallback)
-
-Only if README is unavailable:
-
-```
-CollectionLayer_Phase -> CL_SubStep_Verify -> CL_SubStep_Structures -> CL_SubStep_Instrumentation -> CL_SubStep_Lifecycle
-TelemetryProcessingLayer_Phase -> TPL_SubStep_Framework -> TPL_SubStep_Snapshot -> TPL_SubStep_SinkAndTick
-PresentationLayer_Phase -> PL_SubStep_Verify -> PL_SubStep_Sinks -> PL_SubStep_Integration
-```
 
 ---
 
@@ -168,72 +154,55 @@ PresentationLayer_Phase -> PL_SubStep_Verify -> PL_SubStep_Sinks -> PL_SubStep_I
 
 Resolution order (first match wins):
 
-1. **PST-registered ID**: If `status/status.yaml` already contains an artifact whose `path` matches the LP file → use that artifact's `id` (e.g., `LP-001`).
+1. **PST-registered ID**: If `status/status.yaml` already contains an artifact whose `path` matches the LP file → use that artifact's `id`.
 2. **Filename pattern**: If filename matches `LP-\d{3}-*.md` → extract `LP-001` etc.
 3. **Fallback slug**: `LP.<stem>` (filename without `.md`).
-
-This ensures ELP respects IDs assigned by PST's §6A extraction rules. When PST has already registered an LP as `LP-001`, ELP will update that same record rather than creating a duplicate `LP.<stem>`.
 
 ### LP Path in status.yaml
 
 | Source | `artifacts[].path` value |
 |--------|--------------------------|
-| Workspace-local (`prompts/landing/`) | `prompts/landing/<filename>.md` (relative to workspace) |
-| External (Net Monitor / UE_Iris) | `external:<project>/<filename>.md` (prefixed to signal non-local) |
+| Workspace-local (`prompts/landing/`) | `prompts/landing/<filename>.md` (relative to pst_root) |
+| External (any other absolute path) | `external:<project_dir_name>/<filename>.md` |
 
-The `external:` prefix tells PST's dirty_check to skip this artifact during file-based scanning (it cannot resolve external paths). PST AUDIT treats `external:*` artifacts as "agent-managed" — state transitions come only from ELP, not from file change detection.
+The `external:` prefix tells PST dirty_check to skip this artifact during file-based scanning.
 
 ---
 
 ## § Status Mapping
 
-### LP 状态流转（PST 状态机兼容）
-
-ELP execution results map to PST states as follows:
-
-| ELP 结果 | PST status | 语义 |
+| ELP Result | PST status | Semantics |
 |----------|-----------|------|
-| completed | `ready` | LP 已成功执行，产出可用，下游可消费 |
-| partial | `needs_update` | LP 部分完成，需要重新执行 |
-| blocked | `blocked` | LP 被阻塞，需要外部解决 |
-
-**Why `ready` instead of `archived`:**
-- `archived` is a terminal state in PST's state machine (no outgoing transitions). Using it would make re-execution impossible.
-- `ready` means "this artifact has been processed and its outputs are available for consumption" — which is exactly what a completed LP is.
-- If the user later wants to permanently close an LP (no more re-execution expected), PST AUDIT can transition `ready → archived` through the normal pipeline.
+| completed | `ready` | LP executed successfully, outputs available for downstream |
+| partial | `needs_update` | LP partially completed, needs re-execution |
+| blocked | `blocked` | LP blocked, needs external resolution |
 
 **Valid re-execution transitions:**
-- `ready → ready` (re-executed, still completed — HC version bumps)
-- `ready → needs_update` (re-executed, now partial)
-- `ready → blocked` (re-executed, now blocked)
-- `needs_update → ready` (re-executed, now completed)
-- `needs_update → needs_update` (re-executed, still partial)
-- `blocked → ready` (blocker resolved, re-executed successfully)
-- `blocked → needs_update` (partially unblocked)
-
-All of these are legal in PST's state machine (`ready → needs_update | blocked` is defined; `needs_update → ready` goes through the implicit `needs_update → reviewed → approved → ready` semantic, which ELP collapses because it IS the reviewer+approver+executor).
+- `ready → ready` (re-executed, still completed — HC version bumps if content changed)
+- `ready → needs_update` / `ready → blocked`
+- `needs_update → ready` / `needs_update → needs_update`
+- `blocked → ready` / `blocked → needs_update`
 
 ---
 
 ## § PST 回流
 
-### 触发条件
+### Trigger
 
-Phase A 完成后（无论结果是 completed/partial/blocked），立即执行 Phase B。
+After Phase A completes (regardless of completed/partial/blocked), immediately execute Phase B.
 
-### 写入方式
+### Write Method
 
-**Priority order:**
+Priority order:
+1. If `tools/apply_changes.py` exists in pst_root → write `status/.cache/approved_transitions.json` then invoke pipeline.
+2. If tools/ does not exist → direct-write status.yaml.
 
-1. If `tools/apply_changes.py` exists in workspace → write `status/.cache/approved_transitions.json` then invoke `python tools/apply_changes.py --project <workspace_root>`. This respects PST §1 write boundaries.
-2. If tools/ does not exist (scaffold-only workspace) → direct-write status.yaml. This is acceptable because no PST pipeline exists yet to conflict with.
+### Scaffold Rules
 
-### Scaffold 规则
-
-如果 workspace 根目录下不存在 `status/status.yaml`，创建完整 PST 结构：
+If `<pst_root>/status/status.yaml` does not exist, create minimal structure:
 
 ```
-<workspace_root>/
+<pst_root>/
 ├── status/
 │   ├── status.yaml
 │   └── .cache/
@@ -243,11 +212,11 @@ Phase A 完成后（无论结果是 completed/partial/blocked），立即执行 
 └── (views/ and tools/ are NOT created — PST INIT handles those)
 ```
 
-最小 status.yaml 内容：
+Minimal status.yaml:
 
 ```yaml
 meta:
-  project_name: "<workspace folder name>"
+  project_name: "<pst_root folder name>"
   created: "<ISO timestamp>"
   last_updated: "<ISO timestamp>"
   total_artifacts: 1
@@ -290,39 +259,38 @@ change_events:
     reason: "ELP execution: <one-line summary>"
 ```
 
-### 数据映射
+### Data Mapping
 
-| ELP 产出 | PST 字段 | 规则 |
+| ELP Output | PST Field | Rule |
 |----------|----------|------|
-| LP 文件名 | `artifacts[].id` | 按 § ID Resolution 解析 |
+| LP filename | `artifacts[].id` | Per § ID Resolution |
 | completed | `artifacts[].status` | → `ready` |
 | partial | `artifacts[].status` | → `needs_update` |
 | blocked | `artifacts[].status` | → `blocked` |
-| confirmed 每条 | `handoff_contexts[].facts[]` | 原文 |
-| unresolved 每条 | `handoff_contexts[].constraints[]` | 原文 |
-| 下一个 LP | `handoff_contexts[].consumed_by[]` | `[<next LP id>]` |
-| 修改文件列表 | `change_events[].summary` | 仅记录 |
+| Each confirmed item | `handoff_contexts[].facts[]` | Verbatim |
+| Each unresolved item | `handoff_contexts[].constraints[]` | Verbatim |
+| Next LP | `handoff_contexts[].consumed_by[]` | `[<next LP id>]` |
+| Modified files list | `change_events[].summary` | Record only |
 
-### HC 管理
+### HC Management
 
-**ID 分配:**
-- status.yaml 中已有该 LP 的 HC → 更新 facts/constraints，**不 bump version**（遵守 PST §7 "Never auto-bump HC versions"）
-- 没有 → 分配下一个顺序 ID（HC-001, HC-002...，基于已有最大值）
-- 新创建的 HC 标记 `status: available`
+**ID assignment:**
+- Existing HC for this LP in status.yaml → update facts/constraints
+- No existing HC → assign next sequential ID (HC-001, HC-002... based on max existing)
+- New HC marked `status: available`
 
-**Version bump 条件（仅当以下全部满足时 +1）:**
-- HC 已存在
-- facts 或 constraints 内容实际发生了变化（与上次不同）
-- 这确保只有"新信息"才触发 version bump，纯重复执行不会无意义递增
+**Version bump (only when ALL of these are true):**
+- HC already exists
+- facts or constraints content actually changed (differs from previous)
 
-### 幂等性
+### Idempotency
 
-- 同一 LP 重复执行：更新已有 artifact status，按条件 bump HC version，追加新 change_event
-- 不产生重复 artifact 或 HC 条目
-- change_events 永远追加（审计日志）
-- 如果执行结果与当前 status.yaml 中的状态完全相同且 HC 内容无变化 → 仍追加 change_event（记录执行事实），但不修改 artifact/HC
+- Same LP re-executed: update existing artifact status, conditionally bump HC version, append new change_event
+- Never create duplicate artifact or HC entries
+- change_events always append (audit log)
+- If result identical to current status.yaml state AND HC content unchanged → still append change_event (record execution fact), but don't modify artifact/HC
 
-### change_event 格式
+### change_event Format
 
 ```yaml
 - id: CE-<next>
@@ -337,23 +305,26 @@ change_events:
     reason: "ELP: <one-line summary>"
 ```
 
-### 错误处理
+### Error Handling
 
-如果 Phase B 任何步骤失败（YAML 解析错误、文件写入失败等）：
-1. 不修改 Phase A 的执行状态判定
-2. 在 handoff 末尾追加一行：`⚠️ PST 回流失败: <error description>`
-3. 继续正常输出 handoff
+If Phase B fails at any step (YAML parse error, file write failure, etc.):
+1. Do NOT alter Phase A status determination
+2. Append to handoff footer: `⚠️ PST 回流失败: <error description>`
+3. Continue normal handoff output
 
 ---
 
 ## Safety Checks (before final response)
 
-- README was read first; current prompt was read and only it was executed.
+- README.md was read and front-matter parsed successfully.
+- source_root path exists and is accessible.
+- Current prompt was read and only it was executed.
 - Next prompt was read but not executed; handoff section exists.
+- All code modifications are within declared scope.
+- Code follows Coding Standards declared in README (or steering fallback).
 - No forbidden scope modified; no unresolved reported as confirmed.
-- All code conforms to steering rules + project-specific standards above.
 - Phase B: artifact ID resolved correctly (PST-registered > filename pattern > fallback).
 - Phase B: status mapping uses `ready`/`needs_update`/`blocked` (never `archived`).
-- Phase B: write method matches workspace state (apply_changes.py if exists, else direct).
+- Phase B: write method matches pst_root state (apply_changes.py if exists, else direct).
 - Phase B: HC version only bumped if facts/constraints actually changed.
 - Phase B 回流完成或失败已报告.

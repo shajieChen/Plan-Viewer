@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from render_status import build_dependency_graph, topological_sort_lps, render_project_readme, render_landing_readme
+from render_status import build_dependency_graph, topological_sort_lps, render_project_readme, render_landing_readme, write_with_frontmatter_preservation
 
 
 class TestBuildDependencyGraph:
@@ -254,3 +254,46 @@ class TestRenderLandingReadme:
 
         result = render_landing_readme(status, tmp_path)
         assert "## Coding Standards" not in result
+
+
+class TestFrontmatterPreservation:
+    def test_preserves_existing_frontmatter(self, tmp_path):
+        """Existing front-matter is kept, body from new content is used."""
+        readme = tmp_path / "README.md"
+        readme.write_text(
+            '---\nsource_root: "Q:\\\\Custom"\nscope:\n  - "Q:\\\\Custom"\n---\n\n# Old body\n',
+            encoding="utf-8",
+        )
+
+        # new_content includes its own front-matter (generated from meta)
+        new_content = '---\nsource_root: "Q:\\\\Generated"\n---\n\n# New body\n\nNew content here.\n'
+        write_with_frontmatter_preservation(readme, new_content)
+
+        result = readme.read_text(encoding="utf-8")
+        # Existing front-matter preserved
+        assert 'source_root: "Q:\\\\Custom"' in result
+        # New body used
+        assert "# New body" in result
+        assert "# Old body" not in result
+        # Generated front-matter NOT present
+        assert "Q:\\\\Generated" not in result
+
+    def test_writes_full_content_when_no_file(self, tmp_path):
+        """When file doesn't exist, writes full content as-is."""
+        readme = tmp_path / "README.md"
+        content = "---\nsource_root: /src\n---\n\n# Body\n"
+        write_with_frontmatter_preservation(readme, content)
+
+        result = readme.read_text(encoding="utf-8")
+        assert result == content
+
+    def test_writes_full_when_no_frontmatter(self, tmp_path):
+        """Existing file without front-matter gets fully replaced."""
+        readme = tmp_path / "README.md"
+        readme.write_text("# Just a plain file\n", encoding="utf-8")
+
+        new_content = "---\nsource_root: /src\n---\n\n# New\n"
+        write_with_frontmatter_preservation(readme, new_content)
+
+        result = readme.read_text(encoding="utf-8")
+        assert result == new_content

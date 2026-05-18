@@ -565,6 +565,36 @@ def render_landing_readme(status: dict, project: Path) -> str:
     return frontmatter + "\n\n" + body
 
 
+def write_with_frontmatter_preservation(path: Path, new_content: str) -> None:
+    """Write README, preserving existing YAML front-matter if present.
+
+    new_content may include its own front-matter (generated from meta).
+    If the file already exists with user-written front-matter, the existing
+    front-matter is preserved and only the body from new_content is used.
+
+    If the file doesn't exist or has no front-matter, writes new_content as-is.
+    """
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        if existing.startswith("---"):
+            # Find the closing '---' in existing file
+            second_marker = existing.find("---", 3)
+            if second_marker != -1:
+                frontmatter = existing[: second_marker + 3]
+                # Extract body from new_content (skip its front-matter if present)
+                new_body = new_content
+                if new_content.startswith("---"):
+                    new_second = new_content.find("---", 3)
+                    if new_second != -1:
+                        new_body = new_content[new_second + 3:].lstrip("\n")
+                final = frontmatter + "\n\n" + new_body
+                path.write_text(final, encoding="utf-8")
+                return
+
+    # No existing file or no front-matter — write as-is
+    path.write_text(new_content, encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render status views")
     parser.add_argument("--project", required=True, help="Project root path")
@@ -604,7 +634,22 @@ def main():
         f.write(render_agents_md(status))
     print(f"  Rendered: {agents_path}")
 
-    print(f"\nAll views regenerated ({len(views)} files + AGENTS.md).")
+    # Render project root README.md
+    readme_content = render_project_readme(status, project)
+    readme_path = project / "README.md"
+    with open(readme_path, "w", encoding="utf-8") as f:
+        f.write(readme_content)
+    print(f"  Rendered: {readme_path}")
+
+    # Render prompts/landing/README.md (with front-matter preservation)
+    landing_dir = project / "prompts" / "landing"
+    landing_dir.mkdir(parents=True, exist_ok=True)
+    landing_readme_path = landing_dir / "README.md"
+    landing_full_content = render_landing_readme(status, project)
+    write_with_frontmatter_preservation(landing_readme_path, landing_full_content)
+    print(f"  Rendered: {landing_readme_path}")
+
+    print(f"\nAll views regenerated ({len(views)} files + AGENTS.md + 2 READMEs).")
 
 
 if __name__ == "__main__":

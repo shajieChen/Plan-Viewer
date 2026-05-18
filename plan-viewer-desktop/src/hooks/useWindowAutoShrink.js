@@ -83,6 +83,8 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreD
       try {
         await win.setSize(new LogicalSize(initialSize.width, initialSize.height));
         setIsShrunk(true);
+        // Delay reset to ensure the async resize event from setSize is also ignored
+        await new Promise((r) => setTimeout(r, 100));
       } finally {
         isResizingRef.current = false;
       }
@@ -137,6 +139,8 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreD
       try {
         await win.setSize(new LogicalSize(clampedWidth, clampedHeight));
         setIsShrunk(false);
+        // Delay reset to ensure the async resize event from setSize is also ignored
+        await new Promise((r) => setTimeout(r, 100));
       } finally {
         isResizingRef.current = false;
       }

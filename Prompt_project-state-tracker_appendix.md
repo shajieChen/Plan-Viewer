@@ -136,7 +136,19 @@ Never auto-bump HC versions — EXCEPT when Execute-LandingPrompt writes a HC up
 ### §6G status.yaml Schema (Compact)
 
 ```yaml
-meta: {project_name, created, last_updated, total_artifacts, total_research, total_blockers, hotspots}
+meta:
+  project_name: string
+  created: ISO
+  last_updated: ISO
+  total_artifacts: int
+  total_research: int
+  total_blockers: int
+  hotspots: []
+  source_root: string (optional)      # for README generation + ELP
+  scope: string[] (optional)           # for README generation + ELP
+  pst_root: string (optional)          # for README generation + ELP
+  coding_standards: string (optional)  # for README generation + ELP
+
 artifacts: [{id, type, path, status, depends_on[], produces_handoffs?[], consumes_handoffs?[]}]
 research_findings: [{id, title, path, status, evidence?[], affects?[]}]
 decisions: [{id, title, path, status, based_on[], rejects?[], affects?[]}]

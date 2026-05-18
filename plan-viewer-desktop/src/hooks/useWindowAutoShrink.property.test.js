@@ -581,3 +581,59 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
     );
   }, 30000);
 });
+
+describe('Feature: dwell-cancel-cursor-signal, Property: Shrink fires on cursor leave without debounce', () => {
+  const initialSize = { width: 400, height: 300 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSetSize.mockResolvedValue(undefined);
+    mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+    mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+    mockOnResized.mockResolvedValue(() => {});
+  });
+
+  /**
+   * Property: For any window size larger than initialSize, the moment
+   * cursorPresent flips from true to false, performShrink must be invoked
+   * (i.e. setSize called with initialSize). No external debounce is allowed
+   * to gate this — the orchestrator (useWindowHover) is responsible for
+   * deciding when "leave" actually happened.
+   */
+  it('setSize(initialSize) is called immediately on cursorPresent true → false', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 401, max: 3000 }),
+        fc.integer({ min: 301, max: 2000 }),
+        async (width, height) => {
+          vi.clearAllMocks();
+          mockSetSize.mockResolvedValue(undefined);
+          mockInnerSize.mockResolvedValue({ width, height });
+          mockOuterPosition.mockResolvedValue({ x: 0, y: 0 });
+          mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
+          mockOnResized.mockResolvedValue(() => {});
+
+          const { rerender, unmount } = renderHook(
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
+          );
+
+          rerender({ cursorPresent: false });
+
+          // Shrink must fire — no time advance needed, no debounce in this hook
+          await vi.waitFor(() => {
+            expect(mockSetSize).toHaveBeenCalledTimes(1);
+          });
+
+          const arg = mockSetSize.mock.calls[0][0];
+          expect(arg.width).toBe(initialSize.width);
+          expect(arg.height).toBe(initialSize.height);
+
+          unmount();
+        }
+      ),
+      { numRuns: 50 }
+    );
+  }, 30000);
+});

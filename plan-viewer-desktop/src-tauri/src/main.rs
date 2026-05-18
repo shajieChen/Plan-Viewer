@@ -84,6 +84,8 @@ fn main() {
             commands::get_projects,
             commands::get_dashboard_data,
             commands::set_always_on_top,
+            commands::read_window_sizes,
+            commands::write_window_sizes,
         ])
         .setup(|app| {
             // --- Auto-start Dashboard Server ---

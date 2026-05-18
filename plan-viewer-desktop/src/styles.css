@@ -415,7 +415,9 @@ html, body, #app {
 .readme-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  margin: -8px;
   background: rgba(20, 20, 30, 0.88);
   backdrop-filter: blur(12px);
   border-radius: var(--border-radius);

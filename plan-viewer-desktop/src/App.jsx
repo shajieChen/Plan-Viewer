@@ -7,16 +7,36 @@ import { ReadmePanel } from './components/ReadmePanel.jsx';
 import { useProjects } from './hooks/useProjects.js';
 import { useWindowHover } from './hooks/useWindowHover.js';
 import { useWindowAutoShrink } from './hooks/useWindowAutoShrink.js';
+import { useRememberedSize } from './hooks/useRememberedSize.js';
 
 export function App() {
   const { opacityState, cursorPresent } = useWindowHover();
   const [autoShrink, setAutoShrink] = useState(true);
-  useWindowAutoShrink({
+  const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
+
+  // Circular dependency resolution between useRememberedSize and useWindowAutoShrink:
+  // - useRememberedSize needs savedSize for persistence
+  // - useWindowAutoShrink needs a SHRINK TARGET (small size, ~400×300)
+  // The two hooks share `savedSize` so user resize gets remembered, but the
+  // shrink target must NOT be the remembered (potentially large) size or
+  // performShrink's `currentSize <= initialSize` short-circuit kills shrink
+  // entirely. Hardcode the small target here.
+  const SHRINK_TARGET = { width: 400, height: 300 };
+  const [currentSavedSize, setCurrentSavedSize] = useState(null);
+  const { initialSize: rememberedInitialSize } = useRememberedSize({ selectedProject, savedSize: currentSavedSize });
+  // rememberedInitialSize is read for size persistence/startup but is NOT
+  // passed as the shrink target.
+  void rememberedInitialSize;
+  const { savedSize } = useWindowAutoShrink({
     cursorPresent,
     enabled: autoShrink,
-    initialSize: { width: 400, height: 300 },
+    initialSize: SHRINK_TARGET,
   });
-  const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
+
+  // Feed savedSize from useWindowAutoShrink back to useRememberedSize
+  useEffect(() => {
+    setCurrentSavedSize(savedSize);
+  }, [savedSize]);
   const [showReadme, setShowReadme] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);

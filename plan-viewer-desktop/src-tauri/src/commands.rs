@@ -48,3 +48,48 @@ pub fn set_always_on_top(window: tauri::Window, enabled: bool) -> Result<(), Str
 
 // Note: set_opacity is not available in Tauri v2 Window API.
 // Opacity is handled purely via CSS on the frontend.
+
+#[tauri::command]
+pub fn read_window_sizes(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Manager;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let file_path = data_dir.join("window-sizes.json");
+
+    match std::fs::read_to_string(&file_path) {
+        Ok(content) => Ok(content),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("{}".to_string()),
+        Err(e) => Err(format!("Failed to read window-sizes.json: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub fn write_window_sizes(app: tauri::AppHandle, data: String) -> Result<(), String> {
+    use tauri::Manager;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Ensure the data directory exists
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    let file_path = data_dir.join("window-sizes.json");
+    let tmp_path = data_dir.join("window-sizes.json.tmp");
+
+    // Write to temporary file first
+    std::fs::write(&tmp_path, &data)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Atomic rename
+    std::fs::rename(&tmp_path, &file_path)
+        .map_err(|e| format!("Failed to rename temp file: {}", e))?;
+
+    Ok(())
+}

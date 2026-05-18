@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from render_status import build_dependency_graph, topological_sort_lps, render_project_readme
+from render_status import build_dependency_graph, topological_sort_lps, render_project_readme, render_landing_readme
 
 
 class TestBuildDependencyGraph:
@@ -165,3 +165,92 @@ class TestRenderProjectReadme:
         result = render_project_readme(status, tmp_path)
         assert "B-001" in result
         assert "Missing API" in result
+
+
+class TestRenderLandingReadme:
+    def test_generates_full_file_when_no_existing(self, tmp_path):
+        """When no README exists, generates front-matter + body."""
+        (tmp_path / "prompts" / "landing").mkdir(parents=True)
+
+        status = {
+            "meta": {
+                "project_name": "TestProject",
+                "last_updated": "2026-05-18T00:00:00Z",
+                "source_root": "Q:\\TestProject",
+                "scope": ["Q:\\TestProject", "Q:\\TestProject\\Docs"],
+                "pst_root": "Q:\\TestProject\\Docs",
+                "coding_standards": "Use 4-space indent.",
+            },
+            "artifacts": [
+                {"id": "LP-001", "type": "landing_prompt", "status": "ready",
+                 "depends_on": ["Plan.x"], "produces_handoffs": ["HC-001"]},
+                {"id": "LP-002", "type": "landing_prompt", "status": "draft",
+                 "depends_on": ["LP-001"], "produces_handoffs": []},
+            ],
+            "handoff_contexts": [
+                {"id": "HC-001", "producer": "LP-001", "version": 1,
+                 "status": "available",
+                 "facts": ["fact one", "fact two"],
+                 "constraints": ["must not break API"],
+                 "consumed_by": ["LP-002"]},
+            ],
+        }
+
+        result = render_landing_readme(status, tmp_path)
+
+        # Front-matter
+        assert result.startswith("---\n")
+        assert "source_root:" in result
+        assert "Q:\\TestProject" in result
+        assert "pst_root:" in result
+        # Body
+        assert "## LP \u5e8f\u5217" in result
+        assert "LP-001 -> LP-002" in result
+        assert "## Coding Standards" in result
+        assert "Use 4-space indent." in result
+        assert "## \u5f53\u524d LP \u72b6\u6001" in result
+        assert "## Handoff \u4e0a\u4e0b\u6587\u6458\u8981" in result
+        assert "fact one; fact two" in result
+
+    def test_no_source_root_marks_unconfigured(self, tmp_path):
+        """Missing source_root produces placeholder."""
+        (tmp_path / "prompts" / "landing").mkdir(parents=True)
+
+        status = {
+            "meta": {"project_name": "T", "last_updated": "2026-01-01"},
+            "artifacts": [],
+            "handoff_contexts": [],
+        }
+
+        result = render_landing_readme(status, tmp_path)
+        assert "<\u672a\u914d\u7f6e>" in result
+
+    def test_no_lps_shows_message(self, tmp_path):
+        """No LP artifacts shows placeholder message."""
+        (tmp_path / "prompts" / "landing").mkdir(parents=True)
+
+        status = {
+            "meta": {"project_name": "T", "last_updated": "2026-01-01",
+                     "source_root": "/src"},
+            "artifacts": [
+                {"id": "Plan.x", "type": "plan", "status": "draft", "depends_on": []},
+            ],
+            "handoff_contexts": [],
+        }
+
+        result = render_landing_readme(status, tmp_path)
+        assert "\u5c1a\u65e0\u5df2\u6ce8\u518c\u7684 Landing Prompt" in result
+
+    def test_no_coding_standards_omits_section(self, tmp_path):
+        """Missing coding_standards means no section generated."""
+        (tmp_path / "prompts" / "landing").mkdir(parents=True)
+
+        status = {
+            "meta": {"project_name": "T", "last_updated": "2026-01-01",
+                     "source_root": "/src"},
+            "artifacts": [],
+            "handoff_contexts": [],
+        }
+
+        result = render_landing_readme(status, tmp_path)
+        assert "## Coding Standards" not in result

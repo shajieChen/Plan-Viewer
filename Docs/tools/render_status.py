@@ -474,6 +474,97 @@ def render_project_readme(status: dict, project: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_landing_readme(status: dict, project: Path) -> str:
+    """Render prompts/landing/README.md with ELP-compatible front-matter.
+
+    Returns full content (front-matter + body). The caller uses
+    write_with_frontmatter_preservation() to handle existing files.
+    """
+    meta = status.get("meta", {})
+    project_name = meta.get("project_name", "Unknown")
+    last_updated = meta.get("last_updated", "N/A")
+    source_root = meta.get("source_root", "<未配置>")
+    scope = meta.get("scope", [source_root] if source_root != "<未配置>" else [])
+    pst_root = meta.get("pst_root", str(project))
+    coding_standards = meta.get("coding_standards")
+
+    # --- Generate front-matter ---
+    fm_lines = [
+        "---",
+        f'source_root: "{source_root}"',
+        "scope:",
+    ]
+    for s in scope:
+        fm_lines.append(f'  - "{s}"')
+    fm_lines.append(f'pst_root: "{pst_root}"')
+    fm_lines.append("---")
+
+    frontmatter = "\n".join(fm_lines)
+
+    # --- Generate body ---
+    body_lines = [
+        f"# {project_name} LandingPrompt",
+        "",
+        "> Auto-generated body by project-state-tracker. Front-matter preserved if pre-existing.",
+        f"> Last updated: {last_updated}",
+        "",
+    ]
+
+    # LP sequence
+    body_lines.append("## LP 序列")
+    body_lines.append("")
+    artifacts = status.get("artifacts", [])
+    lp_order = topological_sort_lps(artifacts)
+    if lp_order:
+        body_lines.append(" -> ".join(lp_order))
+    else:
+        body_lines.append("_尚无已注册的 Landing Prompt_")
+    body_lines.append("")
+
+    # Coding Standards (only if configured)
+    if coding_standards:
+        body_lines.append("## Coding Standards")
+        body_lines.append("")
+        body_lines.append(coding_standards)
+        body_lines.append("")
+
+    # LP status table
+    body_lines.append("## 当前 LP 状态")
+    body_lines.append("")
+    lps = [a for a in artifacts if a.get("type") == "landing_prompt"]
+    if lps:
+        body_lines.append("| ID | Status | Depends On | Produces HC |")
+        body_lines.append("|----|--------|------------|-------------|")
+        for lp in sorted(lps, key=lambda a: a.get("id", "")):
+            deps = ", ".join(lp.get("depends_on", []))
+            hcs = ", ".join(lp.get("produces_handoffs", []))
+            body_lines.append(f"| {lp['id']} | {lp.get('status', '?')} | {deps} | {hcs} |")
+    else:
+        body_lines.append("_尚无已注册的 Landing Prompt_")
+    body_lines.append("")
+
+    # Handoff summary
+    body_lines.append("## Handoff 上下文摘要")
+    body_lines.append("")
+    handoffs = status.get("handoff_contexts", [])
+    if handoffs:
+        body_lines.append("| HC | Facts | Constraints | Consumed By |")
+        body_lines.append("|----|-------|-------------|-------------|")
+        for hc in handoffs:
+            facts_str = "; ".join(hc.get("facts", []))
+            constraints_str = "; ".join(hc.get("constraints", []))
+            consumed_str = ", ".join(hc.get("consumed_by", []))
+            body_lines.append(
+                f"| {hc.get('id', '?')} | {facts_str} | {constraints_str} | {consumed_str} |"
+            )
+    else:
+        body_lines.append("_无活跃 handoff_")
+
+    body = "\n".join(body_lines) + "\n"
+
+    return frontmatter + "\n\n" + body
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render status views")
     parser.add_argument("--project", required=True, help="Project root path")

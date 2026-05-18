@@ -175,7 +175,7 @@ describe('useWindowAutoShrink', () => {
       expect(mockOnResized).not.toHaveBeenCalled();
     });
 
-    it('should update savedSize on user-initiated resize while active', async () => {
+    it('should update savedSize on user-initiated resize while cursor is present', async () => {
       let resizeCallback = null;
       mockOnResized.mockImplementation((cb) => {
         resizeCallback = cb;
@@ -250,7 +250,7 @@ describe('useWindowAutoShrink', () => {
       vi.useRealTimers();
     });
 
-    it('should restore window to savedSize on idle → active transition', async () => {
+    it('should restore window to savedSize when cursor enters (false → true)', async () => {
       const { result, rerender } = renderHook(
         ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
         { initialProps: { cursorPresent: true } }
@@ -295,7 +295,7 @@ describe('useWindowAutoShrink', () => {
       });
     });
 
-    it('should do nothing on idle → active when no savedSize exists', async () => {
+    it('should do nothing on cursor enter when no savedSize exists', async () => {
       const { result, rerender } = renderHook(
         ({ cursorPresent }) => useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
         { initialProps: { cursorPresent: false } }

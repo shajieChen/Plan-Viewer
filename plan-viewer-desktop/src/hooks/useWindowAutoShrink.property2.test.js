@@ -57,13 +57,13 @@ describe('Feature: window-auto-shrink, Property 2: No-op shrink when at or below
           mockInnerSize.mockResolvedValue({ width, height });
 
           const { result, rerender } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Trigger active → idle transition (shrink trigger)
-          rerender({ hoverState: 'idle' });
+          // Cursor leaves (shrink trigger)
+          rerender({ cursorPresent: false });
 
           // Wait for async operations to settle
           // The hook reads innerSize() then checks the condition and returns early

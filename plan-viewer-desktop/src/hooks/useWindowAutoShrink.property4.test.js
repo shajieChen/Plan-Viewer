@@ -34,14 +34,8 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
   /**
    * **Validates: Requirements 3.2**
    *
-   * Property 3: For any re-entry time t where 0 < t < 1500ms after mouse-leave,
-   * the shrink operation should not execute and the window should remain at its
-   * current size.
-   *
-   * Since the 1500ms delay is managed by useWindowHover (which provides hoverState),
-   * timer cancellation means hoverState never transitions to 'idle' — it stays 'active'.
-   * From useWindowAutoShrink's perspective, no active → idle transition occurs,
-   * so no shrink should happen regardless of window size or re-entry timing.
+   * Property 3: While cursorPresent stays true (no leave edge fires),
+   * no shrink should ever occur regardless of window size or elapsed time.
    */
 
   const initialSize = { width: 400, height: 300 };
@@ -53,52 +47,35 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
     mockOnResized.mockResolvedValue(() => {});
   });
 
-  it('should not shrink when hoverState stays active (timer cancelled by re-entry)', async () => {
+  it('should not shrink while cursorPresent stays true (no leave edge)', async () => {
     await fc.assert(
       fc.asyncProperty(
-        // Generate random window dimensions (larger than initialSize)
         fc.integer({ min: 401, max: 3000 }),
         fc.integer({ min: 301, max: 2000 }),
-        // Generate random re-entry time t ∈ (0, 1500ms) — simulates how long
-        // the user was away before re-entering (timer gets cancelled)
         fc.integer({ min: 1, max: 1499 }),
-        async (width, height, reentryTimeMs) => {
-          // Configure mock to return the generated dimensions
+        async (width, height, waitMs) => {
           mockSetSize.mockClear();
           mockInnerSize.mockResolvedValue({ width, height });
 
-          // Render hook in active state (mouse is inside window)
+          // Cursor present, hook mounted
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Simulate the passage of time representing the re-entry delay.
-          // The key insight: because the mouse re-entered before 1500ms,
-          // useWindowHover cancels the timer and hoverState stays 'active'.
-          // From useWindowAutoShrink's perspective, hoverState never changes.
-          // We wait for the re-entry time to demonstrate that even after waiting,
-          // no shrink occurs because hoverState remained 'active'.
-          await new Promise((r) => setTimeout(r, Math.min(reentryTimeMs, 50)));
+          // Wait an arbitrary amount of time. Since cursorPresent never goes
+          // false, no leave edge ever fires, so the hook MUST NOT shrink.
+          await new Promise((r) => setTimeout(r, Math.min(waitMs, 50)));
 
-          // Assert: setSize was NOT called (no shrink operation executed)
           expect(mockSetSize).not.toHaveBeenCalled();
-
-          // Assert: savedSize remains null (window size was not saved for restore)
           expect(result.current.savedSize).toBeNull();
-
-          // Assert: isShrunk remains false (window is still at current size)
           expect(result.current.isShrunk).toBe(false);
 
-          // Now simulate what happens if hoverState briefly flickers but returns
-          // to 'active' before the hook can process a shrink. Re-render with
-          // 'active' again (as if useWindowHover cancelled and re-set to active).
-          rerender({ hoverState: 'active' });
-
+          // Re-render with cursorPresent still true (idempotent — no edge)
+          rerender({ cursorPresent: true });
           await new Promise((r) => setTimeout(r, 20));
 
-          // Assert: still no shrink occurred
           expect(mockSetSize).not.toHaveBeenCalled();
           expect(result.current.savedSize).toBeNull();
           expect(result.current.isShrunk).toBe(false);
@@ -110,16 +87,12 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
     );
   }, 30000);
 
-  it('should not shrink when hoverState transitions active → idle → active quickly (re-entry restores after dwell)', async () => {
+  it('should restore after re-entry once dwell delay completes', async () => {
     await fc.assert(
       fc.asyncProperty(
-        // Generate random window dimensions (larger than initialSize)
         fc.integer({ min: 401, max: 3000 }),
         fc.integer({ min: 301, max: 2000 }),
-        // Generate random re-entry time t ∈ (0, 1500ms)
-        fc.integer({ min: 1, max: 1499 }),
-        async (width, height, _reentryTimeMs) => {
-          // Configure mocks
+        async (width, height) => {
           vi.clearAllMocks();
           mockSetSize.mockResolvedValue(undefined);
           mockInnerSize.mockResolvedValue({ width, height });
@@ -127,27 +100,21 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
           mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
           mockOnResized.mockResolvedValue(() => {});
 
-          // Render hook in active state
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Transition active → idle (shrink triggers)
-          rerender({ hoverState: 'idle' });
+          // Cursor leaves → shrink
+          rerender({ cursorPresent: false });
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalled(); });
 
-          // Wait for shrink to complete
-          await vi.waitFor(() => {
-            expect(mockSetSize).toHaveBeenCalled();
-          });
-
-          // Immediately transition idle → active (re-entry, starts dwell timer)
           mockSetSize.mockClear();
 
-          // Use fake timers to advance past dwell delay
+          // Cursor returns → dwell timer starts
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
 
           // Advance past dwell delay (2000ms)
           await act(async () => {
@@ -158,17 +125,11 @@ describe('Feature: window-auto-shrink, Property 3: Timer cancellation on re-entr
           });
           vi.useRealTimers();
 
-          // Wait for restore to complete
-          await vi.waitFor(() => {
-            expect(mockSetSize).toHaveBeenCalled();
-          });
+          await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalled(); });
 
-          // The window should be restored to its original size (not shrunk)
           const restoreArg = mockSetSize.mock.calls[0][0];
           expect(restoreArg.width).toBe(width);
           expect(restoreArg.height).toBe(height);
-
-          // Final state: window is NOT shrunk (it was restored)
           expect(result.current.isShrunk).toBe(false);
 
           unmount();

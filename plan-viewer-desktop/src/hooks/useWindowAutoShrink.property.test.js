@@ -62,15 +62,15 @@ describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round tri
           mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
           mockOnResized.mockResolvedValue(() => {});
 
-          // Render hook in active state
+          // Render hook with cursor present
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Transition active → idle (shrink)
-          rerender({ hoverState: 'idle' });
+          // Cursor leaves (shrink)
+          rerender({ cursorPresent: false });
 
           // Wait for shrink to complete
           await vi.waitFor(() => {
@@ -91,7 +91,7 @@ describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round tri
 
           // Use fake timers to advance past dwell delay
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
           await act(async () => {
             vi.advanceTimersByTime(2000);
             await Promise.resolve(); // flush microtasks from performRestore
@@ -156,9 +156,9 @@ describe('Feature: window-auto-shrink, Property 4: Manual resize updates Saved_S
             return Promise.resolve(() => {});
           });
 
-          // Render hook in active state
+          // Render hook with cursor present
           const { result, unmount } = renderHook(() =>
-            useWindowAutoShrink({ hoverState: 'active', enabled: true, initialSize })
+            useWindowAutoShrink({ cursorPresent: true, enabled: true, initialSize })
           );
 
           // Wait for the async setupListener to complete and capture the callback
@@ -233,15 +233,15 @@ describe('Feature: window-auto-shrink, Property 8: Screen boundary clamping on r
           });
           mockOnResized.mockResolvedValue(() => {});
 
-          // Render hook in active state
+          // Render hook with cursor present
           const { rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Shrink: active → idle (saves the current size)
-          rerender({ hoverState: 'idle' });
+          // Shrink: cursor leaves (saves the current size)
+          rerender({ cursorPresent: false });
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalled();
           });
@@ -250,7 +250,7 @@ describe('Feature: window-auto-shrink, Property 8: Screen boundary clamping on r
 
           // Use fake timers to advance past dwell delay
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
           await act(async () => {
             vi.advanceTimersByTime(2000);
             await Promise.resolve();
@@ -322,15 +322,15 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
           mockCurrentMonitor.mockResolvedValue({ size: { width: 3840, height: 2160 } });
           mockOnResized.mockResolvedValue(() => {});
 
-          // Render hook in active state
+          // Render hook with cursor present
           const { rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Transition active → idle (shrink)
-          rerender({ hoverState: 'idle' });
+          // Cursor leaves (shrink)
+          rerender({ cursorPresent: false });
 
           // Wait for shrink to complete
           await vi.waitFor(() => {
@@ -348,7 +348,7 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
 
           // Use fake timers to advance past dwell delay
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
           await act(async () => {
             vi.advanceTimersByTime(2000);
             await Promise.resolve();
@@ -413,27 +413,27 @@ describe('Feature: restore-dwell-delay, Property: Dwell cancellation on early le
           mockOnResized.mockResolvedValue(() => {});
 
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
           // Shrink first
-          rerender({ hoverState: 'idle' });
+          rerender({ cursorPresent: false });
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
-          expect(result.current.isShrunk).toBe(true);
+          await vi.waitFor(() => { expect(result.current.isShrunk).toBe(true); });
           mockSetSize.mockClear();
 
           // Use fake timers for dwell
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
           expect(result.current.isWaitingRestore).toBe(true);
 
           // Advance by dwellTime (< 2000ms)
           vi.advanceTimersByTime(dwellTime);
 
           // Leave before dwell completes
-          rerender({ hoverState: 'idle' });
+          rerender({ cursorPresent: false });
 
           // Advance well past 2000ms
           vi.advanceTimersByTime(5000);
@@ -477,13 +477,13 @@ describe('Feature: restore-dwell-delay, Property: Restore triggers after full dw
           mockOnResized.mockResolvedValue(() => {});
 
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
           // Shrink
-          rerender({ hoverState: 'idle' });
+          rerender({ cursorPresent: false });
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
           expect(result.current.isShrunk).toBe(true);
           expect(result.current.savedSize).toEqual({ width, height });
@@ -491,7 +491,7 @@ describe('Feature: restore-dwell-delay, Property: Restore triggers after full dw
 
           // Use fake timers for dwell
           vi.useFakeTimers();
-          rerender({ hoverState: 'active' });
+          rerender({ cursorPresent: true });
           expect(result.current.isWaitingRestore).toBe(true);
 
           // Advance full 2000ms
@@ -545,13 +545,13 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
           mockOnResized.mockResolvedValue(() => {});
 
           const { result, rerender, unmount } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: true, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: true, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
           // Shrink first
-          rerender({ hoverState: 'idle' });
+          rerender({ cursorPresent: false });
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
           expect(result.current.isShrunk).toBe(true);
           mockSetSize.mockClear();
@@ -560,9 +560,9 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
 
           // Rapid enter-leave cycles
           for (let i = 0; i < numCycles; i++) {
-            rerender({ hoverState: 'active' });
+            rerender({ cursorPresent: true });
             vi.advanceTimersByTime(dwellTime);
-            rerender({ hoverState: 'idle' });
+            rerender({ cursorPresent: false });
             vi.advanceTimersByTime(100);
           }
 

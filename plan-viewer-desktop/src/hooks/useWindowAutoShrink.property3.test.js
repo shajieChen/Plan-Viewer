@@ -57,13 +57,13 @@ describe('Feature: window-auto-shrink, Property 6: Disabled auto-shrink prevents
           mockInnerSize.mockResolvedValue({ width, height });
 
           const { result, rerender } = renderHook(
-            ({ hoverState }) =>
-              useWindowAutoShrink({ hoverState, enabled: false, initialSize }),
-            { initialProps: { hoverState: 'active' } }
+            ({ cursorPresent }) =>
+              useWindowAutoShrink({ cursorPresent, enabled: false, initialSize }),
+            { initialProps: { cursorPresent: true } }
           );
 
-          // Trigger active → idle transition (simulates mouse leave + delay elapsed)
-          rerender({ hoverState: 'idle' });
+          // Cursor leaves (simulates mouse leaving the window)
+          rerender({ cursorPresent: false });
 
           // Give time for any async operations to settle
           await new Promise((r) => setTimeout(r, 50));

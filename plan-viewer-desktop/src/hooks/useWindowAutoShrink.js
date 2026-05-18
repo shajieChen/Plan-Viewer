@@ -4,33 +4,59 @@ import { LogicalSize } from '@tauri-apps/api/window';
 
 /**
  * Auto-shrink the window when hover state transitions from active → idle,
- * and restore it when transitioning from idle → active.
+ * and restore it when transitioning from idle → active (after a dwell delay).
  * Tracks manual resize events to keep savedSize up-to-date.
  *
- * @param {{ hoverState: 'idle' | 'active', enabled: boolean, initialSize: { width: number, height: number } }} options
- * @returns {{ savedSize: { width: number, height: number } | null, isShrunk: boolean }}
+ * @param {{ hoverState: 'idle' | 'active', enabled: boolean, initialSize: { width: number, height: number }, restoreDelayMs?: number }} options
+ * @param {number} [options.restoreDelayMs=2000] - Milliseconds the cursor must dwell before restore triggers
+ * @returns {{ savedSize: { width: number, height: number } | null, isShrunk: boolean, isWaitingRestore: boolean }}
  */
-export function useWindowAutoShrink({ hoverState, enabled, initialSize }) {
+export function useWindowAutoShrink({ hoverState, enabled, initialSize, restoreDelayMs = 2000 }) {
   const [savedSize, setSavedSize] = useState(null);
   const [isShrunk, setIsShrunk] = useState(false);
+  const [isWaitingRestore, setIsWaitingRestore] = useState(false);
   const prevHoverStateRef = useRef(hoverState);
   // Flag to distinguish hook-triggered resizes from user-initiated resizes
   const isResizingRef = useRef(false);
+  const restoreTimerRef = useRef(null);
 
   useEffect(() => {
     const prevState = prevHoverStateRef.current;
     prevHoverStateRef.current = hoverState;
 
-    // Shrink: active → idle transition when enabled
-    if (prevState === 'active' && hoverState === 'idle' && enabled) {
-      performShrink();
+    // Restore: idle → active transition when savedSize exists — start dwell timer
+    if (prevState === 'idle' && hoverState === 'active' && savedSize) {
+      restoreTimerRef.current = setTimeout(() => {
+        restoreTimerRef.current = null;
+        setIsWaitingRestore(false);
+        performRestore();
+      }, restoreDelayMs);
+      setIsWaitingRestore(true);
     }
 
-    // Restore: idle → active transition when savedSize exists
-    if (prevState === 'idle' && hoverState === 'active' && savedSize) {
-      performRestore();
+    // Shrink: active → idle transition
+    if (prevState === 'active' && hoverState === 'idle') {
+      // Cancel pending restore timer if still waiting
+      if (restoreTimerRef.current) {
+        clearTimeout(restoreTimerRef.current);
+        restoreTimerRef.current = null;
+        setIsWaitingRestore(false);
+      }
+      // Perform shrink if enabled
+      if (enabled) {
+        performShrink();
+      }
     }
-  }, [hoverState, enabled, initialSize]);
+  }, [hoverState, enabled, initialSize, restoreDelayMs]);
+
+  // Cleanup restore timer on unmount
+  useEffect(() => {
+    return () => {
+      if (restoreTimerRef.current) {
+        clearTimeout(restoreTimerRef.current);
+      }
+    };
+  }, []);
 
   async function performShrink() {
     try {
@@ -162,5 +188,5 @@ export function useWindowAutoShrink({ hoverState, enabled, initialSize }) {
     };
   }, [hoverState]);
 
-  return { savedSize, isShrunk };
+  return { savedSize, isShrunk, isWaitingRestore };
 }

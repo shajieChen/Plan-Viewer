@@ -3,34 +3,62 @@ import { getCurrentWindow, currentMonitor } from '@tauri-apps/api/window';
 import { LogicalSize } from '@tauri-apps/api/window';
 
 /**
- * Auto-shrink the window when the cursor leaves, and restore it when the cursor
- * dwells inside the window for `restoreDelayMs` milliseconds. Tracks manual
- * resize events to keep savedSize up-to-date.
+ * Auto-shrink the window after the cursor leaves and dwells outside for
+ * `shrinkDelayMs` milliseconds, and restore it after the cursor enters and
+ * dwells inside for `restoreDelayMs` milliseconds. Tracks manual resize
+ * events to keep savedSize up-to-date.
  *
  * `cursorPresent` is the instantaneous mouse-in-window boolean from
  * `useWindowHover`. We deliberately do NOT consume the debounced `opacityState`,
  * because the dwell-timer cancellation must respond immediately when the cursor
  * leaves — debouncing would let the dwell timer fire before the leave signal arrives.
  *
- * @param {{ cursorPresent: boolean, enabled: boolean, initialSize: { width: number, height: number }, restoreDelayMs?: number }} options
- * @param {number} [options.restoreDelayMs=2000] - Milliseconds the cursor must dwell before restore triggers
- * @returns {{ savedSize: { width: number, height: number } | null, isShrunk: boolean, isWaitingRestore: boolean }}
+ * Asymmetry on cancellation:
+ * - Enter dwell (restoreTimer) IS cancelled by an immediate leave.
+ * - Leave dwell (shrinkTimer) is NOT cancelled by re-entry — option B. After
+ *   shrink completes, if the cursor is still inside, a fresh restore dwell
+ *   is started so the cycle ends at the user's intended size.
+ *
+ * @param {{
+ *   cursorPresent: boolean,
+ *   enabled: boolean,
+ *   initialSize: { width: number, height: number },
+ *   restoreDelayMs?: number,
+ *   shrinkDelayMs?: number,
+ * }} options
+ * @param {number} [options.restoreDelayMs=1500] - Cursor must dwell inside this long before restore triggers
+ * @param {number} [options.shrinkDelayMs=1500] - Cursor must dwell outside this long before shrink triggers
+ * @returns {{
+ *   savedSize: { width: number, height: number } | null,
+ *   isShrunk: boolean,
+ *   isWaitingRestore: boolean,
+ *   isWaitingShrink: boolean,
+ * }}
  */
-export function useWindowAutoShrink({ cursorPresent, enabled, initialSize, restoreDelayMs = 2000 }) {
+export function useWindowAutoShrink({
+  cursorPresent,
+  enabled,
+  initialSize,
+  restoreDelayMs = 1500,
+  shrinkDelayMs = 1500,
+}) {
   const [savedSize, setSavedSize] = useState(null);
   const [isShrunk, setIsShrunk] = useState(false);
   const [isWaitingRestore, setIsWaitingRestore] = useState(false);
+  const [isWaitingShrink, setIsWaitingShrink] = useState(false);
   const prevCursorRef = useRef(cursorPresent);
   // Flag to distinguish hook-triggered resizes from user-initiated resizes
   const isResizingRef = useRef(false);
   const restoreTimerRef = useRef(null);
+  const shrinkTimerRef = useRef(null);
 
   useEffect(() => {
     const prevCursor = prevCursorRef.current;
     prevCursorRef.current = cursorPresent;
 
-    // Cursor entered: start dwell timer if there's a saved size to restore
-    if (prevCursor === false && cursorPresent === true && savedSize) {
+    // Cursor entered: option B — do NOT cancel the shrinkTimer. Just start
+    // a fresh restore dwell if we have a saved size to come back to.
+    if (prevCursor === false && cursorPresent === true && savedSize && !restoreTimerRef.current) {
       restoreTimerRef.current = setTimeout(() => {
         restoreTimerRef.current = null;
         setIsWaitingRestore(false);
@@ -39,7 +67,8 @@ export function useWindowAutoShrink({ cursorPresent, enabled, initialSize, resto
       setIsWaitingRestore(true);
     }
 
-    // Cursor left: cancel any pending restore, then shrink if enabled
+    // Cursor left: cancel any pending restore (immediate cancellation),
+    // then start (or reset) the shrinkTimer if auto-shrink is enabled.
     if (prevCursor === true && cursorPresent === false) {
       if (restoreTimerRef.current) {
         clearTimeout(restoreTimerRef.current);
@@ -47,19 +76,46 @@ export function useWindowAutoShrink({ cursorPresent, enabled, initialSize, resto
         setIsWaitingRestore(false);
       }
       if (enabled) {
-        performShrink();
+        // Reset semantics: a second leave during an in-flight shrink dwell
+        // restarts the timer rather than stacking parallel timers.
+        if (shrinkTimerRef.current) {
+          clearTimeout(shrinkTimerRef.current);
+        }
+        shrinkTimerRef.current = setTimeout(shrinkTimerCallback, shrinkDelayMs);
+        setIsWaitingShrink(true);
       }
     }
-  }, [cursorPresent, enabled, initialSize, restoreDelayMs]);
+  }, [cursorPresent, enabled, initialSize, restoreDelayMs, shrinkDelayMs]);
 
-  // Cleanup restore timer on unmount
+  // Cleanup pending timers on unmount
   useEffect(() => {
     return () => {
       if (restoreTimerRef.current) {
         clearTimeout(restoreTimerRef.current);
       }
+      if (shrinkTimerRef.current) {
+        clearTimeout(shrinkTimerRef.current);
+      }
     };
   }, []);
+
+  async function shrinkTimerCallback() {
+    shrinkTimerRef.current = null;
+    setIsWaitingShrink(false);
+    if (!enabled) return;
+    await performShrink();
+    // Option B chain: if the cursor is still inside after shrink completes
+    // and we now have a savedSize, kick off the restore dwell so the user
+    // ends up back at their intended size.
+    if (prevCursorRef.current === true && !restoreTimerRef.current) {
+      restoreTimerRef.current = setTimeout(() => {
+        restoreTimerRef.current = null;
+        setIsWaitingRestore(false);
+        performRestore();
+      }, restoreDelayMs);
+      setIsWaitingRestore(true);
+    }
+  }
 
   async function performShrink() {
     try {
@@ -195,5 +251,5 @@ export function useWindowAutoShrink({ cursorPresent, enabled, initialSize, resto
     };
   }, [cursorPresent]);
 
-  return { savedSize, isShrunk, isWaitingRestore };
+  return { savedSize, isShrunk, isWaitingRestore, isWaitingShrink };
 }

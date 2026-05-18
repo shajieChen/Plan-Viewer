@@ -3,18 +3,22 @@
 <!-- ANCHOR: tldr -->
 ## TL;DR
 
-- Project: **Plan_Viewer_Docs**
-- Last updated: 2025-05-14T00:00:00Z
-- Artifacts: 0
-- Research findings: 0
+- Project: **Plan_Viewer**
+- Last updated: 2026-05-14T00:00:00Z
+- Artifacts: 3
+- Research findings: 1
 - Open blockers: 0
 
 <!-- ANCHOR: artifacts -->
 ## Artifacts
 
-_No artifacts registered yet._
+| ID | Type | Status | Path |
+|----|------|--------|------|
+| Plan.dashboard-design | plan | draft | plan/2026-05-14-dashboard-visualization-design.md |
 
 <!-- ANCHOR: research -->
 ## Research Findings
 
-_No research findings registered yet._
+| ID | Title | Status | Path |
+|----|-------|--------|------|
+| R-001 | Dashboard 可视化方案调研 | reviewed | research/R-001-Dashboard-Visualization-Research.md |

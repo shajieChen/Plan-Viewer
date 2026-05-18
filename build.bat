@@ -16,7 +16,7 @@ if %BUILD_INSTALLER%==1 (
     set BUNDLE_FLAG=--bundles nsis
     set BUILD_MODE=exe + NSIS installer
 ) else (
-    set BUNDLE_FLAG=--bundles none
+    set BUNDLE_FLAG=--no-bundle
     set BUILD_MODE=exe only ^(use --installer for NSIS package^)
 )
 echo Build mode: !BUILD_MODE!

@@ -29,7 +29,7 @@
 1. WHEN the mouse leaves the window area and remains outside for the duration of the Shrink_Dwell_Delay (1500ms), THE Window_Manager SHALL save the current window size as Saved_Size and resize the window to Initial_Size (400×300).
 2. WHILE the window is already at Initial_Size or smaller, WHEN the mouse leaves the window area, THE Window_Manager SHALL not perform any resize operation.
 3. THE Window_Manager SHALL apply a CSS transition animation during the shrink operation with a duration of 300ms.
-4. WHEN the mouse re-enters the window area before the Shrink_Dwell_Delay elapses, THE Window_Manager SHALL still complete the pending shrink (the dwell is not cancelled by re-entry — option B). After the shrink completes, IF the cursor is still inside the window, THE Window_Manager SHALL start a Restore_Dwell_Delay timer to bring the window back to Saved_Size.
+4. WHEN the mouse re-enters the window area before the Shrink_Dwell_Delay elapses, THE Window_Manager SHALL cancel the pending shrink and keep the window at its current (enlarged) size — symmetric with how a leave during the Restore_Dwell_Delay cancels the pending restore.
 5. WHEN a second mouse-leave event fires while a Shrink_Dwell_Delay timer is already pending, THE Window_Manager SHALL reset the timer (cancel and restart with full Shrink_Dwell_Delay) rather than stack multiple timers.
 
 ### Requirement 2: 窗口恢复触发
@@ -49,7 +49,7 @@
 #### Acceptance Criteria
 
 1. WHEN the mouse leaves the window area, THE Window_Manager SHALL start a 1500ms Shrink_Dwell_Delay timer before performing the shrink operation.
-2. WHEN the mouse re-enters the window area before the Shrink_Dwell_Delay elapses, THE Window_Manager SHALL NOT cancel the pending shrink (option B); see Requirement 1, AC 4 for the behavior after the shrink completes.
+2. WHEN the mouse re-enters the window area before the Shrink_Dwell_Delay elapses, THE Window_Manager SHALL cancel the pending shrink (symmetric with the Restore_Dwell_Delay cancellation rule); see Requirement 1, AC 4.
 3. THE Shrink_Dwell_Delay (1500ms) is owned by the Window_Manager (the `useWindowAutoShrink` hook) and is independent of the Hover_Detector's transparency debounce.
 
 ### Requirement 4: 尺寸记忆

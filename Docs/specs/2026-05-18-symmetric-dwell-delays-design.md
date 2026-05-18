@@ -1,5 +1,7 @@
 # Symmetric Dwell Delays — Design Spec
 
+> **Update (option A pivot):** This spec originally specified option B — re-entry during the leave dwell does NOT cancel the pending shrink, with a chained restore afterwards. After integration testing the option B behavior felt wrong (users saw a useless shrink-then-restore animation when they re-entered the window). The behavior was inverted to **option A**: re-entry during leave dwell DOES cancel the pending shrink, symmetric with leave cancelling enter dwell. The Behavior Matrix, State Machine, Logic Flow, Edge Cases, and Testing sections below were updated to reflect option A. References to option B in the original prose are kept for history.
+
 ## Summary
 
 把 Exe (`plan-viewer-desktop`) 桌面窗口的 hover dwell 行为对称化：
@@ -7,7 +9,7 @@
 - 鼠标进入应用 → **1.5s** 停留后才放大（原 2s）
 - 鼠标离开应用 → **1.5s** 停留后才缩小（原立即缩小）
 
-Per option B：leave dwell 触发后**无条件**执行缩小，即使期间鼠标已经回到窗口里。缩小完成后若 `cursorPresent` 仍为 `true`，自然走 enter 路径再启动 1.5s restore dwell。两个 dwell timer 互不取消，独立运行。
+**Option A**：两个 dwell timer 对称地被对方的 cursor 边沿即时取消。leave 取消正在等的 enter dwell；enter 取消正在等的 leave dwell。窗口要么完成完整的 1.5s dwell 后转换状态，要么保持当前状态——不存在 shrink-then-restore 的多余动画。
 
 ## Context
 
@@ -18,17 +20,17 @@ Per option B：leave dwell 触发后**无条件**执行缩小，即使期间鼠�
 
 把进入延迟收紧到 1.5s、给离开补上 1.5s，整体节奏更平滑。
 
-## Behavior Matrix（修改后）
+## Behavior Matrix（option A — 修改后）
 
 | 当前状态 | 鼠标动作 | 结果 |
 |---|---|---|
 | 已放大 + 不透明 | leave | 启动 1.5s shrinkTimer；窗口尺寸暂不变 |
-| 已放大 + leave dwell 中 | t < 1.5s 内 enter | shrinkTimer **不取消**；按 option B 仍会缩小 |
+| 已放大 + leave dwell 中 | t < 1.5s 内 enter | **shrinkTimer 立即被取消**；窗口保持已放大尺寸（无 shrink，无后续 restore 循环） |
 | 已放大 + leave dwell 中 | t < 1.5s 内 leave 再触发 | **重置 shrinkTimer**（旧 timer 清掉，重启 1.5s）|
-| 已放大 + leave dwell 满 1.5s | timer fired | `performShrink()`；如果 cursorPresent 仍 true，自动进入下一段 |
+| 已放大 + leave dwell 满 1.5s | timer fired | `performShrink()`；进入 SHRUNKEN 状态 |
 | 缩小 + 透明 | enter | 立即不透明（CSS via `opacityState`）；启动 1.5s restoreTimer |
 | 缩小 + 不透明（enter dwell 中）| 停留 ≥ 1.5s | `performRestore()` 到 savedSize |
-| 缩小 + 不透明（enter dwell 中）| t < 1.5s 内 leave | **取消 restoreTimer**（保留现有即时取消行为）；启动 shrinkTimer（no-op，已是 initialSize）|
+| 缩小 + 不透明（enter dwell 中）| t < 1.5s 内 leave | **取消 restoreTimer**；启动 shrinkTimer（窗口已是 initialSize，到期 performShrink no-op）|
 
 ## Architecture
 

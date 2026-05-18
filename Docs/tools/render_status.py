@@ -232,6 +232,75 @@ def render_agents_md(status: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_dependency_graph(status: dict) -> str:
+    """Build a text-based dependency graph from all artifacts.
+
+    Format: each line shows one edge as 'A ← B' meaning B depends_on A.
+    Grouped by topological layer.
+    """
+    # Collect all artifact IDs and their depends_on
+    all_nodes = {}
+    edges = []
+
+    for art in status.get("artifacts", []):
+        all_nodes[art["id"]] = art.get("type", "artifact")
+        for dep in art.get("depends_on", []):
+            edges.append((dep, art["id"]))
+
+    for rf in status.get("research_findings", []):
+        all_nodes[rf["id"]] = "research"
+
+    for dec in status.get("decisions", []):
+        all_nodes[dec["id"]] = "decision"
+        for dep in dec.get("based_on", []):
+            edges.append((dep, dec["id"]))
+
+    if not edges:
+        if all_nodes:
+            return "\n".join(f"- {nid} ({ntype})" for nid, ntype in sorted(all_nodes.items()))
+        return "_无依赖关系_"
+
+    # Build adjacency for topological layering
+    children = {n: [] for n in all_nodes}
+    parents = {n: set() for n in all_nodes}
+    for src, dst in edges:
+        if src in children:
+            children[src].append(dst)
+        if dst in parents:
+            parents[dst].add(src)
+
+    # Kahn's algorithm for layers
+    layers = []
+    remaining = set(all_nodes.keys())
+    while remaining:
+        layer = [n for n in remaining if not parents[n] - (set(all_nodes.keys()) - remaining)]
+        if not layer:
+            # Cycle detected — dump remaining as-is
+            layer = sorted(remaining)
+            layers.append(layer)
+            break
+        layers.append(sorted(layer))
+        remaining -= set(layer)
+
+    # Format edges grouped by target
+    lines = []
+    edge_set = set(edges)
+    for layer in layers:
+        for node in layer:
+            deps_of_node = [src for src, dst in edge_set if dst == node]
+            if deps_of_node:
+                deps_str = ", ".join(sorted(deps_of_node))
+                lines.append(f"{deps_str} ← {node}")
+            else:
+                lines.append(f"{node} (root)")
+
+    if len(edges) > 15:
+        lines.append("")
+        lines.append("_(完整依赖图见 status/status.yaml)_")
+
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Render status views")
     parser.add_argument("--project", required=True, help="Project root path")

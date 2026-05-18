@@ -30,6 +30,17 @@ vi.mock('@tauri-apps/api/window', () => ({
   },
 }));
 
+// Helper: advance fake timers and flush microtasks so async performShrink/Restore can resolve.
+async function advanceAndFlush(ms) {
+  await act(async () => {
+    vi.advanceTimersByTime(ms);
+    // Flush a couple of microtask rounds for the awaited promises in performShrink/Restore
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round trip', () => {
   const initialSize = { width: 400, height: 300 };
 
@@ -69,8 +80,12 @@ describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round tri
             { initialProps: { cursorPresent: true } }
           );
 
-          // Cursor leaves (shrink)
+          // Cursor leaves (shrink) — fake timers must be active BEFORE rerender so the
+          // shrinkTimer is registered with the fake-timer system.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
 
           // Wait for shrink to complete
           await vi.waitFor(() => {
@@ -93,7 +108,7 @@ describe('Feature: window-auto-shrink, Property 1: Shrink-then-restore round tri
           vi.useFakeTimers();
           rerender({ cursorPresent: true });
           await act(async () => {
-            vi.advanceTimersByTime(2000);
+            vi.advanceTimersByTime(1500);
             await Promise.resolve(); // flush microtasks from performRestore
             await Promise.resolve();
             await Promise.resolve();
@@ -240,8 +255,12 @@ describe('Feature: window-auto-shrink, Property 8: Screen boundary clamping on r
             { initialProps: { cursorPresent: true } }
           );
 
-          // Shrink: cursor leaves (saves the current size)
+          // Shrink: cursor leaves (saves the current size). Activate fake timers
+          // BEFORE the rerender so the shrinkTimer is fake.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalled();
           });
@@ -252,7 +271,7 @@ describe('Feature: window-auto-shrink, Property 8: Screen boundary clamping on r
           vi.useFakeTimers();
           rerender({ cursorPresent: true });
           await act(async () => {
-            vi.advanceTimersByTime(2000);
+            vi.advanceTimersByTime(1500);
             await Promise.resolve();
             await Promise.resolve();
             await Promise.resolve();
@@ -329,8 +348,11 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
             { initialProps: { cursorPresent: true } }
           );
 
-          // Cursor leaves (shrink)
+          // Cursor leaves (shrink) — fake timers must be active BEFORE rerender.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
 
           // Wait for shrink to complete
           await vi.waitFor(() => {
@@ -350,7 +372,7 @@ describe('Feature: window-auto-shrink, Property 7: Position preservation during 
           vi.useFakeTimers();
           rerender({ cursorPresent: true });
           await act(async () => {
-            vi.advanceTimersByTime(2000);
+            vi.advanceTimersByTime(1500);
             await Promise.resolve();
             await Promise.resolve();
             await Promise.resolve();
@@ -395,15 +417,15 @@ describe('Feature: restore-dwell-delay, Property: Dwell cancellation on early le
   });
 
   /**
-   * For any random dwell time t ∈ (0, 2000ms), if the mouse leaves
-   * before t reaches 2000ms, the window should NOT restore.
+   * For any random dwell time t ∈ (0, 1500ms), if the mouse leaves
+   * before t reaches 1500ms (the restore dwell), the window should NOT restore.
    */
   it('window remains shrunk when mouse leaves before dwell delay completes', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 401, max: 2000 }),
         fc.integer({ min: 301, max: 1500 }),
-        fc.integer({ min: 1, max: 1999 }),
+        fc.integer({ min: 1, max: 1499 }),
         async (width, height, dwellTime) => {
           vi.clearAllMocks();
           mockSetSize.mockResolvedValue(undefined);
@@ -418,8 +440,12 @@ describe('Feature: restore-dwell-delay, Property: Dwell cancellation on early le
             { initialProps: { cursorPresent: true } }
           );
 
-          // Shrink first
+          // Shrink first — leave + advance past shrink dwell. Fake timers must be
+          // active BEFORE the leave rerender so the shrinkTimer is fake.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
           await vi.waitFor(() => { expect(result.current.isShrunk).toBe(true); });
           mockSetSize.mockClear();
@@ -429,17 +455,19 @@ describe('Feature: restore-dwell-delay, Property: Dwell cancellation on early le
           rerender({ cursorPresent: true });
           expect(result.current.isWaitingRestore).toBe(true);
 
-          // Advance by dwellTime (< 2000ms)
+          // Advance by dwellTime (< 1500ms restore dwell)
           vi.advanceTimersByTime(dwellTime);
 
           // Leave before dwell completes
           rerender({ cursorPresent: false });
 
-          // Advance well past 2000ms
-          vi.advanceTimersByTime(5000);
+          // Advance to just before shrink dwell completes (1499ms after leave)
+          // so the new shrinkTimer does NOT fire — keeps the original assertion
+          // (no setSize) intact.
+          vi.advanceTimersByTime(1499);
           vi.useRealTimers();
 
-          // Should NOT have restored
+          // Restore was cancelled, shrink is still pending (timer not yet expired)
           expect(mockSetSize).not.toHaveBeenCalled();
           expect(result.current.isShrunk).toBe(true);
           expect(result.current.isWaitingRestore).toBe(false);
@@ -482,8 +510,11 @@ describe('Feature: restore-dwell-delay, Property: Restore triggers after full dw
             { initialProps: { cursorPresent: true } }
           );
 
-          // Shrink
+          // Shrink — leave + advance past shrink dwell. Fake timers active first.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
           expect(result.current.isShrunk).toBe(true);
           expect(result.current.savedSize).toEqual({ width, height });
@@ -494,9 +525,9 @@ describe('Feature: restore-dwell-delay, Property: Restore triggers after full dw
           rerender({ cursorPresent: true });
           expect(result.current.isWaitingRestore).toBe(true);
 
-          // Advance full 2000ms
+          // Advance full 1500ms restore dwell
           await act(async () => {
-            vi.advanceTimersByTime(2000);
+            vi.advanceTimersByTime(1500);
             await Promise.resolve();
             await Promise.resolve();
             await Promise.resolve();
@@ -550,11 +581,19 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
             { initialProps: { cursorPresent: true } }
           );
 
-          // Shrink first
+          // Shrink first — leave + advance past shrink dwell. Fake timers active first.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
           await vi.waitFor(() => { expect(mockSetSize).toHaveBeenCalledTimes(1); });
           expect(result.current.isShrunk).toBe(true);
           mockSetSize.mockClear();
+
+          // After the prior shrink the window is at initialSize. Make innerSize
+          // reflect that so any shrinkTimer that fires during the rapid cycles
+          // hits the "already small" no-op short circuit in performShrink.
+          mockInnerSize.mockResolvedValue({ width: initialSize.width, height: initialSize.height });
 
           vi.useFakeTimers();
 
@@ -566,7 +605,9 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
             vi.advanceTimersByTime(100);
           }
 
-          // Advance well past any pending timer
+          // Advance well past any pending timer. The latest shrinkTimer will
+          // fire here, but performShrink no-ops because innerSize already
+          // returns initialSize.
           vi.advanceTimersByTime(10000);
           vi.useRealTimers();
 
@@ -582,7 +623,7 @@ describe('Feature: restore-dwell-delay, Property: Multiple rapid cycles never tr
   }, 30000);
 });
 
-describe('Feature: dwell-cancel-cursor-signal, Property: Shrink fires on cursor leave without debounce', () => {
+describe('Feature: symmetric-dwell-delays, Property: Shrink fires after shrinkDelayMs on cursor leave', () => {
   const initialSize = { width: 400, height: 300 };
 
   beforeEach(() => {
@@ -594,13 +635,15 @@ describe('Feature: dwell-cancel-cursor-signal, Property: Shrink fires on cursor 
   });
 
   /**
-   * Property: For any window size larger than initialSize, the moment
-   * cursorPresent flips from true to false, performShrink must be invoked
-   * (i.e. setSize called with initialSize). No external debounce is allowed
-   * to gate this — the orchestrator (useWindowHover) is responsible for
-   * deciding when "leave" actually happened.
+   * Property: For any window size larger than initialSize, shrink is gated by
+   * the hook's own `shrinkDelayMs` dwell — the cursor-leave edge alone is not
+   * enough to trigger setSize. Once `shrinkDelayMs` has elapsed since the
+   * cursorPresent true → false transition, performShrink runs and setSize is
+   * called with initialSize. The dwell delay is internal to this hook now;
+   * the orchestrator (useWindowHover) no longer carries any debounce
+   * responsibility for this transition.
    */
-  it('setSize(initialSize) is called immediately on cursorPresent true → false', async () => {
+  it('setSize(initialSize) is called after shrinkDelayMs has elapsed since cursorPresent true → false', async () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 401, max: 3000 }),
@@ -619,9 +662,13 @@ describe('Feature: dwell-cancel-cursor-signal, Property: Shrink fires on cursor 
             { initialProps: { cursorPresent: true } }
           );
 
+          // Advance past shrink dwell so the shrinkTimer fires. Fake timers must
+          // be active BEFORE the leave rerender so the timer is fake.
+          vi.useFakeTimers();
           rerender({ cursorPresent: false });
+          await advanceAndFlush(1500);
+          vi.useRealTimers();
 
-          // Shrink must fire — no time advance needed, no debounce in this hook
           await vi.waitFor(() => {
             expect(mockSetSize).toHaveBeenCalledTimes(1);
           });

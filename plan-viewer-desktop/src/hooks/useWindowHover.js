@@ -1,25 +1,37 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 
 /**
- * Track mouse enter/leave on the document to toggle transparency state.
- * Returns "idle" or "active". Transitions back to idle after 1.5s delay.
+ * Track mouse enter/leave on the document and produce two signals:
+ *
+ * - `cursorPresent`: instantaneous boolean — `true` on mouseenter, `false` on mouseleave.
+ *   Use this to drive logic that must respond immediately to the cursor leaving
+ *   (e.g. cancelling a dwell timer).
+ * - `opacityState`: debounced `'idle' | 'active'` — turns `'active'` immediately on
+ *   mouseenter, returns to `'idle'` 3s after mouseleave. Use this to drive transparency
+ *   so the window does not flicker when the user briefly grazes the edge.
+ *
+ * @returns {{ opacityState: 'idle' | 'active', cursorPresent: boolean }}
  */
 export function useWindowHover() {
-  const [state, setState] = useState('idle');
-  const timeoutRef = useRef(null);
+  const [opacityState, setOpacityState] = useState('idle');
+  const [cursorPresent, setCursorPresent] = useState(false);
+  const idleTimeoutRef = useRef(null);
 
   useEffect(() => {
     const handleEnter = () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
       }
-      setState('active');
+      setCursorPresent(true);
+      setOpacityState('active');
     };
 
     const handleLeave = () => {
-      timeoutRef.current = setTimeout(() => {
-        setState('idle');
+      setCursorPresent(false);
+      idleTimeoutRef.current = setTimeout(() => {
+        setOpacityState('idle');
+        idleTimeoutRef.current = null;
       }, 3000);
     };
 
@@ -29,9 +41,9 @@ export function useWindowHover() {
     return () => {
       document.removeEventListener('mouseenter', handleEnter);
       document.removeEventListener('mouseleave', handleLeave);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
     };
   }, []);
 
-  return state;
+  return { opacityState, cursorPresent };
 }

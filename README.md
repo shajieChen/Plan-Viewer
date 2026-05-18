@@ -176,6 +176,22 @@ Project State Tracker 是一个 AI Agent Skill，用于管理 Research → Decis
 
 ---
 
+## 最近更新
+
+### 2026-05-18: Dwell Cancel via Immediate Cursor Signal
+
+修复了窗口缩小后鼠标短暂进入又离开时窗口仍然错误放大的 Bug。
+
+**根因**：`useWindowAutoShrink` 的 dwell-timer 取消逻辑依赖 3s 防抖后的 `hoverState` 信号，而 dwell timer 只有 2s，导致"离开"通知永远晚于 timer 到期。
+
+**修复**：将 `useWindowHover` 拆分为双信号 hook：
+- `cursorPresent: boolean` — 即时反映鼠标是否在窗口内（驱动 shrink/dwell）
+- `opacityState: 'idle' | 'active'` — 3s 防抖（仅驱动 CSS 透明度）
+
+详见：`Docs/specs/2026-05-18-dwell-cancel-cursor-signal-design.md`
+
+---
+
 ## 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件。

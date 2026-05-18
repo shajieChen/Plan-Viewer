@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useState } from 'preact/hooks';
 
-export function TitleBar({ autoShrink = true, onToggleAutoShrink }) {
+export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme }) {
   const [pinned, setPinned] = useState(true);
 
   const togglePin = async () => {
@@ -27,6 +27,13 @@ export function TitleBar({ autoShrink = true, onToggleAutoShrink }) {
         class={`auto-shrink-toggle ${autoShrink ? 'enabled' : 'disabled'}`}
       >
         {autoShrink ? '⇲' : '⇱'}
+      </button>
+      <button
+        onClick={onToggleReadme}
+        title="项目导读"
+        class={`readme-toggle ${showReadme ? 'active' : ''}`}
+      >
+        📖
       </button>
       <button onClick={hideWindow} title="最小化到托盘">
         ✕

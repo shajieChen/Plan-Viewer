@@ -3,6 +3,7 @@ import { TitleBar } from './components/TitleBar.jsx';
 import { SwimLane } from './components/SwimLane.jsx';
 import { CompactView } from './components/CompactView.jsx';
 import { DetailPanel } from './components/DetailPanel.jsx';
+import { ReadmePanel } from './components/ReadmePanel.jsx';
 import { useProjects } from './hooks/useProjects.js';
 import { useWindowHover } from './hooks/useWindowHover.js';
 import { useWindowAutoShrink } from './hooks/useWindowAutoShrink.js';
@@ -16,6 +17,7 @@ export function App() {
     initialSize: { width: 400, height: 300 },
   });
   const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
+  const [showReadme, setShowReadme] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
   const [notFoundToast, setNotFoundToast] = useState(null);
@@ -54,7 +56,12 @@ export function App() {
 
   return (
     <div class={`app-container ${opacityState}`}>
-      <TitleBar autoShrink={autoShrink} onToggleAutoShrink={() => setAutoShrink(prev => !prev)} />
+      <TitleBar
+        autoShrink={autoShrink}
+        onToggleAutoShrink={() => setAutoShrink(prev => !prev)}
+        showReadme={showReadme}
+        onToggleReadme={() => setShowReadme(prev => !prev)}
+      />
 
       {/* Project selector */}
       {projectNames.length > 1 && (
@@ -64,6 +71,7 @@ export function App() {
             onChange={(e) => {
               setSelectedProject(e.target.value);
               setSelectedArtifact(null);
+              setShowReadme(false);
             }}
           >
             {projectNames.map((name) => (
@@ -88,29 +96,35 @@ export function App() {
 
         {!loading && !error && artifacts.length > 0 && (
           <>
-            <div class="main-view">
-              {isCompact ? (
-                <CompactView artifacts={artifacts} />
-              ) : (
-                <SwimLane
-                  artifacts={artifacts}
-                  onSelectArtifact={setSelectedArtifact}
-                  highlightedId={highlightedId}
-                />
-              )}
-            </div>
+            {showReadme ? (
+              <ReadmePanel projectName={selectedProject} onClose={() => setShowReadme(false)} />
+            ) : (
+              <>
+                <div class="main-view">
+                  {isCompact ? (
+                    <CompactView artifacts={artifacts} />
+                  ) : (
+                    <SwimLane
+                      artifacts={artifacts}
+                      onSelectArtifact={setSelectedArtifact}
+                      highlightedId={highlightedId}
+                    />
+                  )}
+                </div>
 
-            {selectedArtifact && !isCompact && (
-              <div class={`detail-container ${hasSidePanel ? 'side' : 'bottom'}`}>
-                <DetailPanel
-                  artifact={selectedArtifact}
-                  changeEvents={changeEvents}
-                  markdownPreview={markdownPreviews[selectedArtifact.id]}
-                  onClose={() => setSelectedArtifact(null)}
-                  onNavigateDep={handleNavigateDep}
-                />
-                {notFoundToast && <span class="nav-toast">{notFoundToast}</span>}
-              </div>
+                {selectedArtifact && !isCompact && (
+                  <div class={`detail-container ${hasSidePanel ? 'side' : 'bottom'}`}>
+                    <DetailPanel
+                      artifact={selectedArtifact}
+                      changeEvents={changeEvents}
+                      markdownPreview={markdownPreviews[selectedArtifact.id]}
+                      onClose={() => setSelectedArtifact(null)}
+                      onNavigateDep={handleNavigateDep}
+                    />
+                    {notFoundToast && <span class="nav-toast">{notFoundToast}</span>}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

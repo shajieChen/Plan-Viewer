@@ -71,14 +71,74 @@ describe('TitleBar Auto-Shrink toggle', () => {
     expect(toggle.classList.contains('enabled')).toBe(false);
   });
 
-  it('toggle button is positioned between pin and close buttons', () => {
+  it('toggle button is positioned between pin and readme buttons', () => {
     const { container } = render(
       <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} />
     );
 
     const buttons = container.querySelectorAll('button');
-    // Order: pin button, auto-shrink toggle, close button
-    expect(buttons.length).toBe(3);
+    // Order: pin button, auto-shrink toggle, readme toggle, close button
+    expect(buttons.length).toBe(4);
     expect(buttons[1].classList.contains('auto-shrink-toggle')).toBe(true);
+  });
+});
+
+describe('TitleBar README button', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders 📖 button with tooltip "项目导读"', () => {
+    const { container } = render(
+      <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} showReadme={false} onToggleReadme={() => {}} />
+    );
+
+    const readmeBtn = container.querySelector('.readme-toggle');
+    expect(readmeBtn).not.toBeNull();
+    expect(readmeBtn.textContent).toBe('📖');
+    expect(readmeBtn.getAttribute('title')).toBe('项目导读');
+  });
+
+  it('is positioned between the auto-shrink button and the close button (index 2 of 4)', () => {
+    const { container } = render(
+      <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} showReadme={false} onToggleReadme={() => {}} />
+    );
+
+    const buttons = container.querySelectorAll('button');
+    // Order: pin (0), auto-shrink (1), readme (2), close (3)
+    expect(buttons.length).toBe(4);
+    expect(buttons[1].classList.contains('auto-shrink-toggle')).toBe(true);
+    expect(buttons[2].classList.contains('readme-toggle')).toBe(true);
+    expect(buttons[3].getAttribute('title')).toBe('最小化到托盘');
+  });
+
+  it('calls onToggleReadme when clicked', () => {
+    const onToggleReadme = vi.fn();
+    const { container } = render(
+      <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} showReadme={false} onToggleReadme={onToggleReadme} />
+    );
+
+    const readmeBtn = container.querySelector('.readme-toggle');
+    fireEvent.click(readmeBtn);
+
+    expect(onToggleReadme).toHaveBeenCalledTimes(1);
+  });
+
+  it('has "active" class when showReadme is true', () => {
+    const { container } = render(
+      <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} showReadme={true} onToggleReadme={() => {}} />
+    );
+
+    const readmeBtn = container.querySelector('.readme-toggle');
+    expect(readmeBtn.classList.contains('active')).toBe(true);
+  });
+
+  it('does not have "active" class when showReadme is false', () => {
+    const { container } = render(
+      <TitleBar autoShrink={true} onToggleAutoShrink={() => {}} showReadme={false} onToggleReadme={() => {}} />
+    );
+
+    const readmeBtn = container.querySelector('.readme-toggle');
+    expect(readmeBtn.classList.contains('active')).toBe(false);
   });
 });

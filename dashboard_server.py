@@ -198,6 +198,18 @@ handoff_context_required_fields:
 class DashboardHandler(BaseHTTPRequestHandler):
     """HTTP request handler with routing for static files and API endpoints."""
 
+    def end_headers(self):
+        """Override to inject CORS headers on every response."""
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        super().end_headers()
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight requests."""
+        self.send_response(204)
+        self.end_headers()
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path

@@ -178,6 +178,20 @@ Project State Tracker 是一个 AI Agent Skill，用于管理 Research → Decis
 
 ## 最近更新
 
+### 2026-05-18: README 导读面板 + 服务器自动启动
+
+**README 导读按钮 (📖)**：标题栏新增导读按钮，点击后在主内容区渲染当前项目的 README.md。
+
+- Markdown 渲染（headings、lists、code blocks、links、bold、italic）
+- 内部 `.md` 链接导航 + 面包屑历史（最多 10 层）
+- 外部链接自动在系统浏览器打开
+- Glassmorphism 风格一致
+- 关闭/切换项目时自动重置状态
+
+**Dashboard Server 自动启动**：exe 启动时自动检测并后台启动 `dashboard_server.py`，无需手动运行 `serve.bat`。
+
+**CORS 修复**：Dashboard Server 添加 `Access-Control-Allow-Origin: *` 头，解决 Tauri WebView 跨域请求被拒绝的问题。
+
 ### 2026-05-18: Dwell Cancel via Immediate Cursor Signal
 
 修复了窗口缩小后鼠标短暂进入又离开时窗口仍然错误放大的 Bug。

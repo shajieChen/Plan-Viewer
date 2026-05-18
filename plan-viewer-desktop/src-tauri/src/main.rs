@@ -11,6 +11,66 @@ use tauri::{
     Manager,
 };
 
+use std::process::Command as StdCommand;
+
+/// Find dashboard_server.py by searching from the exe directory upward.
+fn find_dashboard_server() -> Option<std::path::PathBuf> {
+    let exe_dir = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .to_path_buf();
+
+    let mut dir = exe_dir;
+    loop {
+        let candidate = dir.join("dashboard_server.py");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        if !dir.pop() {
+            break;
+        }
+    }
+    None
+}
+
+/// Spawn the dashboard server as a background process if not already running.
+fn ensure_dashboard_server() {
+    // Quick check: try to connect to port 8000
+    if std::net::TcpStream::connect("127.0.0.1:8000").is_ok() {
+        // Server already running
+        return;
+    }
+
+    if let Some(server_path) = find_dashboard_server() {
+        let server_dir = server_path.parent().unwrap().to_path_buf();
+        // Try "python" first, fall back to "py"
+        let python = if StdCommand::new("python").arg("--version").output().is_ok() {
+            "python"
+        } else {
+            "py"
+        };
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            let _ = StdCommand::new(python)
+                .arg(&server_path)
+                .current_dir(&server_dir)
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        }
+
+        #[cfg(not(windows))]
+        {
+            let _ = StdCommand::new(python)
+                .arg(&server_path)
+                .current_dir(&server_dir)
+                .spawn();
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -26,6 +86,9 @@ fn main() {
             commands::set_always_on_top,
         ])
         .setup(|app| {
+            // --- Auto-start Dashboard Server ---
+            ensure_dashboard_server();
+
             // --- System Tray ---
             let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;

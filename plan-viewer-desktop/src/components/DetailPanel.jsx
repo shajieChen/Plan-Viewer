@@ -1,10 +1,60 @@
-import { useMemo } from 'preact/hooks';
+import { useMemo, useState, useEffect } from 'preact/hooks';
 import { marked } from 'marked';
+import { STATUS_COLORS, VALID_STATUSES, getStatusColor } from '../utils/statusConstants.js';
 
 /**
  * DetailPanel: shows artifact details when a swim-lane card is clicked.
  */
-export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose, onNavigateDep }) {
+export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose, onNavigateDep, projectName }) {
+  // Status selector state
+  const [localStatus, setLocalStatus] = useState(artifact ? artifact.status : 'draft');
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Sync localStatus when the artifact prop changes (e.g. after watcher refresh)
+  useEffect(() => {
+    if (artifact) {
+      setLocalStatus(artifact.status);
+      setError(null);
+    }
+  }, [artifact && artifact.id, artifact && artifact.status]);
+
+  // Status change handler with Tauri IPC invocation
+  const handleStatusChange = async (e) => {
+    const newStatus = e.target.value;
+    const previousStatus = localStatus;
+
+    // Optimistic update
+    setLocalStatus(newStatus);
+    setUpdating(true);
+    setError(null);
+
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), 10000)
+      );
+
+      const invokePromise = window.__TAURI__.core.invoke('update_artifact_status', {
+        project_name: projectName,
+        artifact_id: artifact.id,
+        new_status: newStatus,
+      });
+
+      await Promise.race([invokePromise, timeoutPromise]);
+      // Success - localStatus already set optimistically
+      setUpdating(false);
+    } catch (err) {
+      // Revert on failure
+      setLocalStatus(previousStatus);
+      setUpdating(false);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
+
+      // Auto-clear error after 5 seconds
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
   if (!artifact) return null;
 
   // Filter change events related to this artifact
@@ -29,7 +79,20 @@ export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose, 
       </div>
 
       <div class="detail-meta">
-        <span class={`detail-badge status-${artifact.status}`}>{artifact.status}</span>
+        <select
+          value={localStatus}
+          disabled={updating}
+          style={{
+            backgroundColor: getStatusColor(localStatus),
+            color: '#ffffff',
+            opacity: updating ? 0.5 : 1,
+          }}
+          class={`detail-badge status-${localStatus}`}
+          onChange={handleStatusChange}
+        >
+          {VALID_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {error && <span class="status-error" style={{ color: '#ef4444', fontSize: '0.75rem', marginLeft: '0.5rem' }}>{error}</span>}
         <span class="detail-type">{artifact.type}</span>
       </div>
 

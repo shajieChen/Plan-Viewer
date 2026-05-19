@@ -80,3 +80,16 @@ pub struct ProjectUpdatePayload {
     pub project_path: String,
     pub timestamp: String,
 }
+
+/// Valid status values for artifacts
+pub const VALID_STATUSES: &[&str] = &[
+    "draft", "reviewed", "approved", "ready", "blocked",
+    "needs_update", "invalidated", "deprecated", "archived",
+];
+
+/// Response returned after a successful status update
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateStatusResponse {
+    pub artifact_id: String,
+    pub new_status: String,
+}

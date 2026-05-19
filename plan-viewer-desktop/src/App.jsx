@@ -140,6 +140,7 @@ export function App() {
                       markdownPreview={markdownPreviews[selectedArtifact.id]}
                       onClose={() => setSelectedArtifact(null)}
                       onNavigateDep={handleNavigateDep}
+                      projectName={selectedProject}
                     />
                     {notFoundToast && <span class="nav-toast">{notFoundToast}</span>}
                   </div>

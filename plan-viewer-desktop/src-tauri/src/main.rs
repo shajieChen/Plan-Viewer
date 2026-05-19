@@ -86,6 +86,7 @@ fn main() {
             commands::set_always_on_top,
             commands::read_window_sizes,
             commands::write_window_sizes,
+            commands::update_artifact_status,
         ])
         .setup(|app| {
             // --- Auto-start Dashboard Server ---

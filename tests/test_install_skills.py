@@ -441,3 +441,23 @@ class TestIOHelpers:
         # guarantee that source files appear at target with current contents.
         new_skill_md = (target_root / "demo" / "SKILL.md").read_text(encoding="utf-8")
         assert "fresh-body" in new_skill_md
+
+
+def test_project_state_spec_is_discovered():
+    """Verify project-state-spec is present and parseable in Tools/Skills/."""
+    import sys
+    from pathlib import Path
+    repo = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(repo / "Tools"))
+    sys.path.insert(0, str(repo / "Docs" / "tools"))
+    from install_skills import discover_skills, load_skill, SKILLS_SOURCE_DIR  # type: ignore
+
+    discovered = discover_skills(SKILLS_SOURCE_DIR)
+    names = [d.name for d in discovered]
+    assert "project-state-spec" in names
+
+    skill_dir = next(d for d in discovered if d.name == "project-state-spec")
+    skill = load_skill(skill_dir)
+    assert skill.metadata["name"] == "project-state-spec"
+    assert "Requirement" in skill.metadata["description"] or "Three-stage" in skill.metadata["description"]
+    assert skill.body.strip().startswith("# project-state-spec")

@@ -138,3 +138,43 @@ class TestNextId:
     def test_unknown_prefix_raises(self):
         with pytest.raises(ValueError):
             next_id({"artifacts": []}, "ZZ")
+
+
+from _spec_helpers import find_artifact_by_topic  # noqa: E402
+
+
+class TestFindArtifactByTopic:
+    @pytest.fixture
+    def status(self):
+        return {
+            "artifacts": [
+                {"id": "R-001", "type": "research_finding",
+                 "path": "research/R-001-readme-guide-button.md"},
+                {"id": "D-001", "type": "decision",
+                 "path": "decisions/D-001-readme-guide-button.yaml"},
+                {"id": "Plan.readme-guide-button", "type": "plan",
+                 "path": "plan/2026-05-19-readme-guide-button-design.md"},
+                {"id": "R-002", "type": "research_finding",
+                 "path": "research/R-002-other-topic.md"},
+            ]
+        }
+
+    def test_finds_research(self, status):
+        found = find_artifact_by_topic(status, "readme-guide-button", "research_finding")
+        assert found is not None
+        assert found["id"] == "R-001"
+
+    def test_finds_decision(self, status):
+        found = find_artifact_by_topic(status, "readme-guide-button", "decision")
+        assert found["id"] == "D-001"
+
+    def test_finds_plan(self, status):
+        found = find_artifact_by_topic(status, "readme-guide-button", "plan")
+        assert found["id"] == "Plan.readme-guide-button"
+
+    def test_returns_none_on_miss(self, status):
+        assert find_artifact_by_topic(status, "nonexistent", "research_finding") is None
+
+    def test_does_not_match_partial_substring(self, status):
+        # "readme" alone must NOT match "readme-guide-button"
+        assert find_artifact_by_topic(status, "readme", "research_finding") is None

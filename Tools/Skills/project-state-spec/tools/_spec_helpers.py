@@ -94,3 +94,35 @@ def next_id(status: dict, prefix: str) -> str:
 
     next_num = (max(seen) + 1) if seen else 1
     return f"{prefix}-{next_num:03d}"
+
+
+def find_artifact_by_topic(
+    status: dict, topic: str, artifact_type: str
+) -> dict | None:
+    """Return the first artifact of ``artifact_type`` whose path matches ``topic``.
+
+    Path-suffix matching rules:
+      - research_finding : ``research/R-NNN-<topic>.md``
+      - decision         : ``decisions/D-NNN-<topic>.yaml``
+      - plan             : ``plan/<DATE>-<topic>-design.md``
+
+    Returns None if no match.
+    """
+    suffix_map = {
+        "research_finding": f"-{topic}.md",
+        "decision":         f"-{topic}.yaml",
+        "plan":             f"-{topic}-design.md",
+    }
+    if artifact_type not in suffix_map:
+        raise ValueError(f"Unknown artifact_type: {artifact_type!r}")
+    suffix = suffix_map[artifact_type]
+
+    for entry in status.get("artifacts", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("type") != artifact_type:
+            continue
+        path = entry.get("path", "")
+        if isinstance(path, str) and path.endswith(suffix):
+            return entry
+    return None

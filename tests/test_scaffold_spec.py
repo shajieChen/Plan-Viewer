@@ -286,3 +286,42 @@ class TestDesignStage:
         )
         assert result.returncode == 2
         assert "requirement" in result.stderr.lower()
+
+    def test_design_force_reuses_existing_path(self, tmp_path):
+        """--force on existing Plan must overwrite the original file, not create a dated duplicate."""
+        make_pst_skeleton(tmp_path)
+        self._run_requirement(tmp_path)
+
+        plan_body = tmp_path / "_plan.md"
+        plan_body.write_text("## Overview\nv1\n", encoding="utf-8")
+
+        # First write — establishes the Plan path.
+        first = run_script(
+            "--stage", "design",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--plan-content", str(plan_body),
+        )
+        assert first.returncode == 0, first.stderr
+        first_path = json.loads(first.stdout)["plan_path"]
+
+        # Second write with --force — must reuse the same path.
+        plan_body.write_text("## Overview\nv2\n", encoding="utf-8")
+        second = run_script(
+            "--stage", "design",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--plan-content", str(plan_body),
+            "--force",
+        )
+        assert second.returncode == 0, second.stderr
+        second_path = json.loads(second.stdout)["plan_path"]
+
+        assert first_path == second_path, (
+            f"--force should reuse path; got first={first_path!r}, second={second_path!r}"
+        )
+        # Only one plan file should exist on disk.
+        plan_files = list((tmp_path / "plan").glob("*.md"))
+        assert len(plan_files) == 1, f"expected 1 plan file, got {plan_files}"
+        # And it should contain the v2 content.
+        assert "v2" in plan_files[0].read_text(encoding="utf-8")

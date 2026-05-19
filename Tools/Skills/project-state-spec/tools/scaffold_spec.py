@@ -267,7 +267,13 @@ def cmd_design(args: argparse.Namespace) -> int:
         return 2
 
     plan_id = f"Plan.{topic}"
-    plan_path_rel = f"plan/{today_iso()}-{topic}-design.md"
+    # Reuse existing Plan path on regeneration so cross-day --force does not
+    # orphan the original file under a new date prefix.
+    existing_plan = find_artifact_by_topic(status, topic, "plan")
+    if existing_plan and isinstance(existing_plan.get("path"), str):
+        plan_path_rel = existing_plan["path"]
+    else:
+        plan_path_rel = f"plan/{today_iso()}-{topic}-design.md"
     plan_path = pst_root / plan_path_rel
 
     title = _topic_title(topic)

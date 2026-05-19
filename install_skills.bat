@@ -9,6 +9,12 @@ echo ============================================================
 echo   Skill Installer
 echo ============================================================
 
+REM -- Ensure submodules are initialized and up-to-date --
+git submodule update --init --remote
+if %errorlevel% neq 0 (
+    echo WARNING: git submodule update failed, continuing with existing state...
+)
+
 REM -- Try python first; on 9009 (command not found) fall back to py --
 python Tools\install_skills.py
 if %errorlevel% equ 9009 goto :try_py

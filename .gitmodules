@@ -1,0 +1,12 @@
+[submodule "Tools/Skills/Execute-LandingPrompt"]
+	path = Tools/Skills/Execute-LandingPrompt
+	url = https://github.com/shajieChen/kiro-skill-execute-landingprompt.git
+	branch = main
+[submodule "Tools/Skills/project-state-tracker"]
+	path = Tools/Skills/project-state-tracker
+	url = https://github.com/shajieChen/kiro-skill-project-state-tracker.git
+	branch = main
+[submodule "Tools/Skills/project-state-spec"]
+	path = Tools/Skills/project-state-spec
+	url = https://github.com/shajieChen/kiro-skill-project-state-spec.git
+	branch = main

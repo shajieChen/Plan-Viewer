@@ -10,3 +10,7 @@
 	path = Tools/Skills/project-state-spec
 	url = https://github.com/shajieChen/kiro-skill-project-state-spec.git
 	branch = main
+[submodule "Tools/Skills/OpenSpec"]
+	path = Tools/Skills/OpenSpec
+	url = https://github.com/Fission-AI/OpenSpec.git
+	branch = main

@@ -79,3 +79,14 @@ class TestLoadStatus:
     def test_missing_status_raises(self, tmp_path):
         with pytest.raises(StatusYamlMissingError):
             load_status(tmp_path)
+
+    def test_empty_yaml_returns_empty_dict(self, tmp_path):
+        (tmp_path / "status").mkdir()
+        (tmp_path / "status" / "status.yaml").write_text("", encoding="utf-8")
+        assert load_status(tmp_path) == {}
+
+    def test_non_mapping_yaml_raises(self, tmp_path):
+        (tmp_path / "status").mkdir()
+        (tmp_path / "status" / "status.yaml").write_text("- a\n- b\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            load_status(tmp_path)

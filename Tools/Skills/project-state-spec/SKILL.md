@@ -48,6 +48,8 @@ Show the draft to the user and ask for confirmation. Iterate until they approve.
 ### Step 1.3 — Draft D
 Read `templates/d_template.yaml`. Compose a yaml body. **Critical:** every Acceptance Criterion's `statements` MUST use EARS keywords (SHALL, WHEN, IF, WHILE). Self-check before showing the draft. If a statement does not contain SHALL, rewrite it.
 
+**Important:** Do NOT include the top-level keys `id`, `title`, `status`, or `based_on` in your draft. The scaffold script auto-prepends these (e.g. `id: D-001\ntitle: "..."\nstatus: draft\nbased_on: [R-001]\n`). Including them yourself produces a YAML file with duplicate top-level keys, which is invalid.
+
 Show the draft to the user. Iterate until approved.
 
 ### Step 1.4 — Scaffold
@@ -174,6 +176,12 @@ When the user invokes `continue <topic>`:
 ## Known Limitations
 
 - **Tasks --force regeneration orphans previous LP/TP files.** Re-running `--stage tasks --force` allocates fresh LP-NNN/TP-NNN ids (because `next_id` reads status.yaml, which already contains the previous LP/TP entries). The new ids do not collide with the old paths, so the previous files remain on disk while status.yaml gains new artifacts. PST AUDIT will flag the orphans on its next run. Workaround: hand-delete the old `prompts/landing/LP-NNN-*.md` and `prompts/test/TP-NNN-*.md` files before re-running.
+
+- **Design --force may accumulate duplicate Plan transitions in status.yaml.** Each design invocation emits a `from: null → to: draft` transition for the same `Plan.<topic>` id. Whether `apply_changes.py` deduplicates these (versus appending a new artifact entry) depends on its implementation. PST AUDIT can reconcile, but if you re-run design more than once, run `Skill project-state-tracker + audit` to clean up.
+
+- **Distribution: only Kiro and Claude installs include the scaffold script.** `install_skills.py` deploys folder-style skills to Kiro (`~/.kiro/skills/`) and Claude (`~/.claude/skills/`) including all subdirectories (`tools/`, `templates/`). Cursor (single `.mdc` file), Copilot, and Codex (shared concat files) only receive the SKILL.md body — they do NOT receive `tools/scaffold_spec.py` or the templates. To use this skill from those agents, either install via Kiro/Claude on the same machine, or invoke the script directly from the source repo.
+
+- **EARS validation is agent-side only.** The scaffold script does not parse or validate AC statements. If the agent's EARS self-check is skipped or wrong, malformed acceptance criteria will land in `decisions/D-NNN-*.yaml` unchecked. The Self-Checks section above is the only enforcement.
 
 ## What This Skill Does NOT Do
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -21,10 +22,58 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _spec_helpers import (  # noqa: E402
+    FileExistsRefuseError,
     StatusYamlMissingError,
     find_artifact_by_topic,
     load_status,
+    next_id,
+    safe_write,
+    slugify,
+    today_iso,
 )
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _topic_title(topic: str) -> str:
+    """Convert kebab-case slug to Title Case for display."""
+    return " ".join(word.capitalize() for word in topic.split("-"))
+
+
+def _write_transitions_and_apply(
+    pst_root: Path,
+    transitions: list[dict],
+    event_summary: str,
+    event_type: str,
+) -> None:
+    """Write approved_transitions.json then invoke apply_changes.py.
+
+    Raises subprocess.CalledProcessError on apply_changes failure.
+    """
+    cache_dir = pst_root / "status" / ".cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "event_summary": event_summary,
+        "event_type": event_type,
+        "transitions": transitions,
+    }
+    (cache_dir / "approved_transitions.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    apply_script = pst_root / "tools" / "apply_changes.py"
+    if not apply_script.is_file():
+        raise FileNotFoundError(
+            f"apply_changes.py not found at {apply_script}. "
+            "Run PST INIT to create the tools/ directory."
+        )
+    subprocess.run(
+        [sys.executable, str(apply_script), "--project", str(pst_root)],
+        check=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +157,83 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_requirement(args: argparse.Namespace) -> int:
-    raise NotImplementedError("requirement stage — implemented in Task 7")
+    if not args.r_content or not args.d_content:
+        print("ERROR: --stage requirement requires --r-content and --d-content",
+              file=sys.stderr)
+        return 2
+
+    pst_root = Path(args.pst_root)
+    try:
+        status = load_status(pst_root)
+    except StatusYamlMissingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    topic = slugify(args.topic)
+
+    # Reuse existing ids if topic already has artifacts so safe_write detects
+    # the collision and refuses (Property: idempotent without --force).
+    existing_r = find_artifact_by_topic(status, topic, "research_finding")
+    existing_d = find_artifact_by_topic(status, topic, "decision")
+    r_id = existing_r["id"] if existing_r else next_id(status, "R")
+    d_id = existing_d["id"] if existing_d else next_id(status, "D")
+    title = _topic_title(topic)
+
+    r_path_rel = f"research/{r_id}-{topic}.md"
+    d_path_rel = f"decisions/{d_id}-{topic}.yaml"
+    r_path = pst_root / r_path_rel
+    d_path = pst_root / d_path_rel
+
+    r_body = Path(args.r_content).read_text(encoding="utf-8")
+    d_body = Path(args.d_content).read_text(encoding="utf-8")
+
+    r_full = f"# {r_id}: {title}\n\n{r_body.lstrip()}"
+    d_full = (
+        f"id: {d_id}\n"
+        f"title: \"{title}\"\n"
+        f"status: draft\n"
+        f"based_on: [{r_id}]\n"
+        f"{d_body.lstrip()}"
+    )
+
+    try:
+        safe_write(r_path, r_full, force=args.force)
+        safe_write(d_path, d_full, force=args.force)
+    except FileExistsRefuseError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    transitions = [
+        {"artifact": r_id, "type": "research_finding",
+         "from": None, "to": "draft",
+         "path": r_path_rel,
+         "reason": f"project-state-spec scaffold: requirement stage for {topic}",
+         "source": "project-state-spec"},
+        {"artifact": d_id, "type": "decision",
+         "from": None, "to": "draft",
+         "path": d_path_rel,
+         "depends_on": [r_id],
+         "reason": f"project-state-spec scaffold: requirement stage for {topic}",
+         "source": "project-state-spec"},
+    ]
+    try:
+        _write_transitions_and_apply(
+            pst_root,
+            transitions,
+            event_summary=f"project-state-spec scaffold: requirement stage for {topic}",
+            event_type="spec_scaffold",
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        print(f"ERROR: apply_changes.py failed: {exc}", file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+
+    print(json.dumps({
+        "r_id": r_id, "d_id": d_id,
+        "r_path": r_path_rel, "d_path": d_path_rel,
+    }, ensure_ascii=False, indent=2))
+    return 0
 
 
 def cmd_design(args: argparse.Namespace) -> int:

@@ -121,3 +121,109 @@ class TestStatusStage:
         )
         assert result.returncode == 2
         assert "status.yaml" in result.stderr.lower()
+
+
+class TestRequirementStage:
+    def test_creates_r_and_d_and_registers(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        r_body = tmp_path / "_r.md"
+        d_body = tmp_path / "_d.yaml"
+        r_body.write_text(
+            "## Background\nDemo background.\n\n"
+            "## Current State\nNothing exists.\n\n"
+            "## Constraints\nMust be small.\n\n"
+            "## References\nNone.\n",
+            encoding="utf-8",
+        )
+        d_body.write_text(
+            "problem_statement: A small demo problem.\n"
+            "decision: |\n"
+            "  Build a small thing.\n"
+            "acceptance_criteria:\n"
+            "  - id: AC-1\n"
+            "    user_story: \"As a user, I want X, so that Y.\"\n"
+            "    statements:\n"
+            "      - \"WHEN x, THE system SHALL y.\"\n"
+            "rationale: Because.\n"
+            "alternatives_considered: []\n",
+            encoding="utf-8",
+        )
+
+        result = run_script(
+            "--stage", "requirement",
+            "--topic", "demo-feature",
+            "--pst-root", str(tmp_path),
+            "--r-content", str(r_body),
+            "--d-content", str(d_body),
+        )
+        assert result.returncode == 0, result.stderr
+        out = json.loads(result.stdout)
+        assert out["r_id"] == "R-001"
+        assert out["d_id"] == "D-001"
+        assert out["r_path"].replace("\\", "/") == "research/R-001-demo-feature.md"
+        assert out["d_path"].replace("\\", "/") == "decisions/D-001-demo-feature.yaml"
+
+        r_file = tmp_path / "research" / "R-001-demo-feature.md"
+        d_file = tmp_path / "decisions" / "D-001-demo-feature.yaml"
+        assert r_file.is_file()
+        assert d_file.is_file()
+        assert r_file.read_text(encoding="utf-8").startswith("# R-001:")
+        d_yaml = d_file.read_text(encoding="utf-8")
+        assert "id: D-001" in d_yaml
+        assert "based_on:" in d_yaml and "R-001" in d_yaml
+
+    def test_repeated_without_force_exits_2(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        r_body = tmp_path / "_r.md"
+        d_body = tmp_path / "_d.yaml"
+        r_body.write_text("## Background\n", encoding="utf-8")
+        d_body.write_text(
+            "problem_statement: x\ndecision: x\n"
+            "acceptance_criteria: []\nrationale: x\n"
+            "alternatives_considered: []\n",
+            encoding="utf-8",
+        )
+
+        ok = run_script(
+            "--stage", "requirement",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--r-content", str(r_body),
+            "--d-content", str(d_body),
+        )
+        assert ok.returncode == 0, ok.stderr
+
+        again = run_script(
+            "--stage", "requirement",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--r-content", str(r_body),
+            "--d-content", str(d_body),
+        )
+        assert again.returncode == 2
+        assert "exist" in again.stderr.lower()
+
+    def test_apply_changes_failure_keeps_files(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        # Replace the stub with a script that always fails.
+        (tmp_path / "tools" / "apply_changes.py").write_text(
+            "import sys; sys.stderr.write('boom\\n'); sys.exit(7)\n",
+            encoding="utf-8",
+        )
+        r_body = tmp_path / "_r.md"
+        d_body = tmp_path / "_d.yaml"
+        r_body.write_text("## Background\n", encoding="utf-8")
+        d_body.write_text("problem_statement: x\ndecision: x\nacceptance_criteria: []\nrationale: x\nalternatives_considered: []\n", encoding="utf-8")
+
+        result = run_script(
+            "--stage", "requirement",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--r-content", str(r_body),
+            "--d-content", str(d_body),
+        )
+        assert result.returncode != 0
+        # Files should still exist (no rollback per Property 7).
+        assert (tmp_path / "research" / "R-001-demo.md").is_file()
+        assert (tmp_path / "decisions" / "D-001-demo.yaml").is_file()
+        assert "boom" in result.stderr or "PST AUDIT" in result.stderr

@@ -44,3 +44,38 @@ class TestSlugify:
     def test_pure_non_ascii_raises(self):
         with pytest.raises(ValueError):
             slugify("中文")
+
+
+import re as _re
+import textwrap
+
+from _spec_helpers import today_iso, load_status, StatusYamlMissingError  # noqa: E402
+
+
+class TestTodayIso:
+    def test_format_is_yyyy_mm_dd(self):
+        s = today_iso()
+        assert _re.fullmatch(r"\d{4}-\d{2}-\d{2}", s), s
+
+
+class TestLoadStatus:
+    def test_loads_existing_yaml(self, tmp_path):
+        status_dir = tmp_path / "status"
+        status_dir.mkdir()
+        (status_dir / "status.yaml").write_text(
+            textwrap.dedent(
+                """\
+                meta:
+                  project_name: demo
+                artifacts: []
+                """
+            ),
+            encoding="utf-8",
+        )
+        data = load_status(tmp_path)
+        assert data["meta"]["project_name"] == "demo"
+        assert data["artifacts"] == []
+
+    def test_missing_status_raises(self, tmp_path):
+        with pytest.raises(StatusYamlMissingError):
+            load_status(tmp_path)

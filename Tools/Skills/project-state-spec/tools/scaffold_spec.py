@@ -243,7 +243,78 @@ def cmd_requirement(args: argparse.Namespace) -> int:
 
 
 def cmd_design(args: argparse.Namespace) -> int:
-    raise NotImplementedError("design stage — implemented in Task 8")
+    if not args.plan_content:
+        print("ERROR: --stage design requires --plan-content", file=sys.stderr)
+        return 2
+
+    pst_root = Path(args.pst_root)
+    try:
+        status = load_status(pst_root)
+    except StatusYamlMissingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    topic = slugify(args.topic)
+
+    r = find_artifact_by_topic(status, topic, "research_finding")
+    d = find_artifact_by_topic(status, topic, "decision")
+    if r is None or d is None:
+        print(
+            f"ERROR: No R/D found for topic {topic!r}. "
+            "Run --stage requirement first.",
+            file=sys.stderr,
+        )
+        return 2
+
+    plan_id = f"Plan.{topic}"
+    plan_path_rel = f"plan/{today_iso()}-{topic}-design.md"
+    plan_path = pst_root / plan_path_rel
+
+    title = _topic_title(topic)
+    body = Path(args.plan_content).read_text(encoding="utf-8")
+    full = (
+        f"# {plan_id}: {title}\n\n"
+        f"<!-- based_on: [{r['id']}, {d['id']}] -->\n\n"
+        f"{body.lstrip()}"
+    )
+
+    try:
+        safe_write(plan_path, full, force=args.force)
+    except FileExistsRefuseError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    transitions = [{
+        "artifact": plan_id, "type": "plan",
+        "from": None, "to": "draft",
+        "path": plan_path_rel,
+        "depends_on": [r["id"], d["id"]],
+        "reason": f"project-state-spec scaffold: design stage for {topic}",
+        "source": "project-state-spec",
+    }]
+    try:
+        _write_transitions_and_apply(
+            pst_root,
+            transitions,
+            event_summary=f"project-state-spec scaffold: design stage for {topic}",
+            event_type="spec_scaffold",
+        )
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+    except subprocess.CalledProcessError as exc:
+        print(f"ERROR: apply_changes.py failed (exit {exc.returncode}): {exc}",
+              file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+
+    print(json.dumps({
+        "plan_id": plan_id, "plan_path": plan_path_rel,
+    }, ensure_ascii=False, indent=2))
+    return 0
 
 
 def cmd_tasks(args: argparse.Namespace) -> int:

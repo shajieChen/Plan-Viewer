@@ -227,3 +227,62 @@ class TestRequirementStage:
         assert (tmp_path / "research" / "R-001-demo.md").is_file()
         assert (tmp_path / "decisions" / "D-001-demo.yaml").is_file()
         assert "boom" in result.stderr or "PST AUDIT" in result.stderr
+
+
+class TestDesignStage:
+    def _run_requirement(self, root):
+        r_body = root / "_r.md"
+        d_body = root / "_d.yaml"
+        r_body.write_text("## Background\nx\n", encoding="utf-8")
+        d_body.write_text(
+            "problem_statement: x\ndecision: x\n"
+            "acceptance_criteria: []\nrationale: x\n"
+            "alternatives_considered: []\n",
+            encoding="utf-8",
+        )
+        ok = run_script(
+            "--stage", "requirement",
+            "--topic", "demo",
+            "--pst-root", str(root),
+            "--r-content", str(r_body),
+            "--d-content", str(d_body),
+        )
+        assert ok.returncode == 0, ok.stderr
+
+    def test_design_creates_plan_and_registers(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        self._run_requirement(tmp_path)
+
+        plan_body = tmp_path / "_plan.md"
+        plan_body.write_text(
+            "## Overview\nA small plan.\n\n## Architecture\n...\n",
+            encoding="utf-8",
+        )
+
+        result = run_script(
+            "--stage", "design",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--plan-content", str(plan_body),
+        )
+        assert result.returncode == 0, result.stderr
+        out = json.loads(result.stdout)
+        assert out["plan_id"] == "Plan.demo"
+        plan_path = tmp_path / out["plan_path"]
+        assert plan_path.is_file()
+        text = plan_path.read_text(encoding="utf-8")
+        assert text.startswith("# Plan.demo:")
+        assert "based_on" in text and "R-001" in text and "D-001" in text
+
+    def test_design_without_requirement_exits_2(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        plan_body = tmp_path / "_plan.md"
+        plan_body.write_text("## Overview\n", encoding="utf-8")
+        result = run_script(
+            "--stage", "design",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--plan-content", str(plan_body),
+        )
+        assert result.returncode == 2
+        assert "requirement" in result.stderr.lower()

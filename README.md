@@ -32,12 +32,13 @@ build.bat
 
 Python (PyYAML) · React 18 (CDN) · Mermaid.js · marked.js · Tauri + Vite
 
-## 关联 Skill
+## 关联 Skill (submodules)
 
-| Skill | 仓库 |
-|-------|------|
-| project-state-tracker | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-tracker) |
-| Execute-LandingPrompt | [GitHub](https://github.com/shajieChen/kiro-skill-execute-landingprompt) |
+| Skill | 用途 | 仓库 |
+|-------|------|------|
+| project-state-tracker | 工件生命周期管理 + 状态追踪 | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-tracker) |
+| project-state-spec | 三阶段 Spec 编写 (R→D→Task) | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-spec) |
+| Execute-LandingPrompt | 执行 LP 并回流状态 | [GitHub](https://github.com/shajieChen/kiro-skill-execute-landingprompt) |
 
 ## 测试
 

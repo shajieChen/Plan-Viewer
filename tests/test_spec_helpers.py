@@ -178,3 +178,31 @@ class TestFindArtifactByTopic:
     def test_does_not_match_partial_substring(self, status):
         # "readme" alone must NOT match "readme-guide-button"
         assert find_artifact_by_topic(status, "readme", "research_finding") is None
+
+    def test_does_not_match_hyphenated_substring(self):
+        # topic="guide-button" must NOT match path with topic "readme-guide-button"
+        status = {
+            "artifacts": [
+                {"id": "R-001", "type": "research_finding",
+                 "path": "research/R-001-readme-guide-button.md"},
+            ]
+        }
+        assert find_artifact_by_topic(status, "guide-button", "research_finding") is None
+
+    def test_raises_on_unknown_artifact_type(self):
+        with pytest.raises(ValueError):
+            find_artifact_by_topic({"artifacts": []}, "any-topic", "blockador")
+
+    def test_returns_first_match_when_duplicates(self):
+        # Two artifacts of the same type and same topic — return the first.
+        status = {
+            "artifacts": [
+                {"id": "R-001", "type": "research_finding",
+                 "path": "research/R-001-foo.md"},
+                {"id": "R-002", "type": "research_finding",
+                 "path": "research/R-002-foo.md"},
+            ]
+        }
+        found = find_artifact_by_topic(status, "foo", "research_finding")
+        assert found is not None
+        assert found["id"] == "R-001"

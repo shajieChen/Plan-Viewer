@@ -101,21 +101,26 @@ def find_artifact_by_topic(
 ) -> dict | None:
     """Return the first artifact of ``artifact_type`` whose path matches ``topic``.
 
-    Path-suffix matching rules:
-      - research_finding : ``research/R-NNN-<topic>.md``
-      - decision         : ``decisions/D-NNN-<topic>.yaml``
-      - plan             : ``plan/<DATE>-<topic>-design.md``
+    Path-shape matching rules (anchored, full-path):
+      - research_finding : ``research/R-<digits>-<topic>.md``
+      - decision         : ``decisions/D-<digits>-<topic>.yaml``
+      - plan             : ``plan/<YYYY-MM-DD>-<topic>-design.md``
 
-    Returns None if no match.
+    The full-path anchor prevents false matches when ``topic`` is itself a
+    hyphen-containing tail of another topic (e.g. ``guide-button`` must not
+    match a path ending in ``readme-guide-button.md``).
+
+    Returns the first matching entry, or ``None`` if none match.
+    Raises ``ValueError`` if ``artifact_type`` is unknown.
     """
-    suffix_map = {
-        "research_finding": f"-{topic}.md",
-        "decision":         f"-{topic}.yaml",
-        "plan":             f"-{topic}-design.md",
+    pattern_map = {
+        "research_finding": rf"^research/R-\d+-{_re.escape(topic)}\.md$",
+        "decision":         rf"^decisions/D-\d+-{_re.escape(topic)}\.yaml$",
+        "plan":             rf"^plan/\d{{4}}-\d{{2}}-\d{{2}}-{_re.escape(topic)}-design\.md$",
     }
-    if artifact_type not in suffix_map:
+    if artifact_type not in pattern_map:
         raise ValueError(f"Unknown artifact_type: {artifact_type!r}")
-    suffix = suffix_map[artifact_type]
+    pattern = _re.compile(pattern_map[artifact_type])
 
     for entry in status.get("artifacts", []) or []:
         if not isinstance(entry, dict):
@@ -123,6 +128,6 @@ def find_artifact_by_topic(
         if entry.get("type") != artifact_type:
             continue
         path = entry.get("path", "")
-        if isinstance(path, str) and path.endswith(suffix):
+        if isinstance(path, str) and pattern.match(path):
             return entry
     return None

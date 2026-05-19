@@ -17,6 +17,10 @@ class StatusYamlMissingError(FileNotFoundError):
     """Raised when ``<pst_root>/status/status.yaml`` does not exist."""
 
 
+class FileExistsRefuseError(FileExistsError):
+    """Raised by safe_write when the target file exists and force=False."""
+
+
 def slugify(text: str) -> str:
     """Lowercase, replace non-ASCII alphanumerics with ``-``, collapse repeats.
 
@@ -131,3 +135,19 @@ def find_artifact_by_topic(
         if isinstance(path, str) and pattern.match(path):
             return entry
     return None
+
+
+def safe_write(path: Path | str, content: str, force: bool) -> None:
+    """Write ``content`` (UTF-8, LF) to ``path``.
+
+    Creates parent directories. If ``path`` already exists and ``force`` is
+    False, raises ``FileExistsRefuseError`` and writes nothing.
+    """
+    path = Path(path)
+    if path.exists() and not force:
+        raise FileExistsRefuseError(
+            f"Refusing to overwrite existing file: {path} (pass --force to override)"
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(content)

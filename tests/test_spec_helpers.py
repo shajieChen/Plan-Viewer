@@ -206,3 +206,26 @@ class TestFindArtifactByTopic:
         found = find_artifact_by_topic(status, "foo", "research_finding")
         assert found is not None
         assert found["id"] == "R-001"
+
+
+from _spec_helpers import safe_write, FileExistsRefuseError  # noqa: E402
+
+
+class TestSafeWrite:
+    def test_creates_parent_dirs(self, tmp_path):
+        target = tmp_path / "a" / "b" / "c.txt"
+        safe_write(target, "hello", force=False)
+        assert target.read_text(encoding="utf-8") == "hello"
+
+    def test_refuses_existing_without_force(self, tmp_path):
+        target = tmp_path / "f.txt"
+        target.write_text("old", encoding="utf-8")
+        with pytest.raises(FileExistsRefuseError):
+            safe_write(target, "new", force=False)
+        assert target.read_text(encoding="utf-8") == "old"
+
+    def test_overwrites_with_force(self, tmp_path):
+        target = tmp_path / "f.txt"
+        target.write_text("old", encoding="utf-8")
+        safe_write(target, "new", force=True)
+        assert target.read_text(encoding="utf-8") == "new"

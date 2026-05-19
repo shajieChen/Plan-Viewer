@@ -325,3 +325,117 @@ class TestDesignStage:
         assert len(plan_files) == 1, f"expected 1 plan file, got {plan_files}"
         # And it should contain the v2 content.
         assert "v2" in plan_files[0].read_text(encoding="utf-8")
+
+
+class TestTasksStage:
+    def _run_requirement_and_design(self, root):
+        r_body = root / "_r.md"
+        d_body = root / "_d.yaml"
+        plan_body = root / "_plan.md"
+        r_body.write_text("## Background\nx\n", encoding="utf-8")
+        d_body.write_text("problem_statement: x\ndecision: x\nacceptance_criteria: []\nrationale: x\nalternatives_considered: []\n", encoding="utf-8")
+        plan_body.write_text("## Overview\nx\n", encoding="utf-8")
+        assert run_script("--stage", "requirement", "--topic", "demo", "--pst-root", str(root), "--r-content", str(r_body), "--d-content", str(d_body)).returncode == 0
+        assert run_script("--stage", "design", "--topic", "demo", "--pst-root", str(root), "--plan-content", str(plan_body)).returncode == 0
+
+    def test_tasks_creates_lp_tp_pairs_and_readme(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        self._run_requirement_and_design(tmp_path)
+
+        lp1 = tmp_path / "_lp1.md"
+        tp1 = tmp_path / "_tp1.md"
+        lp2 = tmp_path / "_lp2.md"
+        tp2 = tmp_path / "_tp2.md"
+        for f in (lp1, tp1, lp2, tp2):
+            f.write_text(f"# Goal\nbody for {f.name}\n", encoding="utf-8")
+
+        manifest = tmp_path / "_manifest.json"
+        manifest.write_text(json.dumps({
+            "tasks": [
+                {"slug": "alpha", "lp_content": str(lp1), "tp_content": str(tp1),
+                 "validates_ac": ["AC-1"], "validates_property": ["P1"]},
+                {"slug": "beta", "lp_content": str(lp2), "tp_content": str(tp2),
+                 "validates_ac": ["AC-2"], "validates_property": ["P2"]},
+            ],
+            "lp_sequence": ["alpha", "beta"],
+            "coding_standards": "- Use 4 spaces.\n- No tabs.\n",
+        }), encoding="utf-8")
+
+        result = run_script(
+            "--stage", "tasks",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--tasks-manifest", str(manifest),
+        )
+        assert result.returncode == 0, result.stderr
+        out = json.loads(result.stdout)
+        assert len(out["tasks"]) == 2
+        assert out["tasks"][0]["lp_id"] == "LP-001"
+        assert out["tasks"][0]["tp_id"] == "TP-001"
+        assert out["tasks"][1]["lp_id"] == "LP-002"
+        assert out["tasks"][1]["tp_id"] == "TP-002"
+
+        # Files exist.
+        assert (tmp_path / "prompts" / "landing" / "LP-001-alpha.md").is_file()
+        assert (tmp_path / "prompts" / "landing" / "LP-002-beta.md").is_file()
+        assert (tmp_path / "prompts" / "test" / "TP-001-alpha.md").is_file()
+        assert (tmp_path / "prompts" / "test" / "TP-002-beta.md").is_file()
+
+        readme = (tmp_path / "prompts" / "landing" / "README.md").read_text(encoding="utf-8")
+        assert "## LP 序列" in readme
+        assert "LP-001-alpha -> LP-002-beta" in readme
+        assert "## Coding Standards" in readme
+        assert "Use 4 spaces" in readme
+        # Front-matter contains source_root.
+        assert readme.startswith("---")
+        assert "source_root:" in readme
+
+        # Property 5: every transition recorded in the change_event carries
+        # source="project-state-spec".
+        # Property 8: every TP depends_on entry references an LP.
+        import yaml as _yaml
+        status = _yaml.safe_load((tmp_path / "status" / "status.yaml").read_text(encoding="utf-8"))
+        events = status.get("change_events", [])
+        assert events, "no change_events recorded"
+        last = events[-1]
+        srcs = {t.get("source") for t in last["transitions"]}
+        assert srcs == {"project-state-spec"}, srcs
+        tps = [t for t in last["transitions"] if t.get("type") == "test_prompt"]
+        assert tps, "no TP transitions recorded"
+        for tp in tps:
+            assert any(d.startswith("LP-") for d in tp["depends_on"])
+
+    def test_tasks_without_design_exits_2(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        manifest = tmp_path / "_manifest.json"
+        manifest.write_text(json.dumps({"tasks": [], "lp_sequence": []}), encoding="utf-8")
+        result = run_script(
+            "--stage", "tasks",
+            "--topic", "demo",
+            "--pst-root", str(tmp_path),
+            "--tasks-manifest", str(manifest),
+        )
+        assert result.returncode == 2
+        assert "plan" in result.stderr.lower()
+
+    def test_tasks_status_marks_done_when_all_present(self, tmp_path):
+        make_pst_skeleton(tmp_path)
+        self._run_requirement_and_design(tmp_path)
+        lp1 = tmp_path / "_lp1.md"
+        tp1 = tmp_path / "_tp1.md"
+        lp1.write_text("body\n", encoding="utf-8")
+        tp1.write_text("body\n", encoding="utf-8")
+        manifest = tmp_path / "_manifest.json"
+        manifest.write_text(json.dumps({
+            "tasks": [{"slug": "alpha", "lp_content": str(lp1), "tp_content": str(tp1),
+                       "validates_ac": [], "validates_property": []}],
+            "lp_sequence": ["alpha"],
+        }), encoding="utf-8")
+        assert run_script("--stage", "tasks", "--topic", "demo", "--pst-root", str(tmp_path), "--tasks-manifest", str(manifest)).returncode == 0
+
+        status_result = run_script("--stage", "status", "--topic", "demo", "--pst-root", str(tmp_path))
+        assert status_result.returncode == 0
+        info = json.loads(status_result.stdout)
+        assert info["next_stage"] == "done"
+        assert info["stages"]["tasks"]["lp_count"] == 1
+        assert info["stages"]["tasks"]["tp_count"] == 1

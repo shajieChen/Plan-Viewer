@@ -324,7 +324,164 @@ def cmd_design(args: argparse.Namespace) -> int:
 
 
 def cmd_tasks(args: argparse.Namespace) -> int:
-    raise NotImplementedError("tasks stage — implemented in Task 9")
+    if not args.tasks_manifest:
+        print("ERROR: --stage tasks requires --tasks-manifest", file=sys.stderr)
+        return 2
+
+    pst_root = Path(args.pst_root)
+    try:
+        status = load_status(pst_root)
+    except StatusYamlMissingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    topic = slugify(args.topic)
+    plan = find_artifact_by_topic(status, topic, "plan")
+    if plan is None:
+        print(
+            f"ERROR: No Plan found for topic {topic!r}. "
+            "Run --stage design first.",
+            file=sys.stderr,
+        )
+        return 2
+    plan_id = plan["id"]
+
+    manifest = json.loads(Path(args.tasks_manifest).read_text(encoding="utf-8"))
+    tasks: list[dict] = manifest.get("tasks", [])
+    if not tasks:
+        print("ERROR: tasks manifest contains no tasks", file=sys.stderr)
+        return 2
+    lp_sequence: list[str] = manifest.get("lp_sequence", [t["slug"] for t in tasks])
+    coding_standards: str | None = manifest.get("coding_standards")
+
+    # Allocate sequential ids in manifest order.
+    base_lp = next_id(status, "LP")  # e.g. "LP-001"
+    base_tp = next_id(status, "TP")
+    base_lp_n = int(base_lp.split("-")[1])
+    base_tp_n = int(base_tp.split("-")[1])
+
+    written_pairs = []
+    transitions: list[dict] = []
+    for i, t in enumerate(tasks):
+        lp_id = f"LP-{base_lp_n + i:03d}"
+        tp_id = f"TP-{base_tp_n + i:03d}"
+        slug = slugify(t["slug"])
+
+        lp_path_rel = f"prompts/landing/{lp_id}-{slug}.md"
+        tp_path_rel = f"prompts/test/{tp_id}-{slug}.md"
+        lp_path = pst_root / lp_path_rel
+        tp_path = pst_root / tp_path_rel
+
+        lp_body = Path(t["lp_content"]).read_text(encoding="utf-8")
+        tp_body = Path(t["tp_content"]).read_text(encoding="utf-8")
+
+        validates_ac = t.get("validates_ac", [])
+        validates_property = t.get("validates_property", [])
+        meta_block = (
+            f"<!-- validates_ac: {validates_ac} -->\n"
+            f"<!-- validates_property: {validates_property} -->\n"
+        )
+
+        lp_full = f"# {lp_id}: {slug}\n\n{meta_block}\n{lp_body.lstrip()}"
+        tp_full = f"# {tp_id}: {slug}\n\n{meta_block}\n{tp_body.lstrip()}"
+
+        try:
+            safe_write(lp_path, lp_full, force=args.force)
+            safe_write(tp_path, tp_full, force=args.force)
+        except FileExistsRefuseError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
+        transitions.append({
+            "artifact": lp_id, "type": "landing_prompt",
+            "from": None, "to": "draft",
+            "path": lp_path_rel,
+            "depends_on": [plan_id],
+            "reason": f"project-state-spec scaffold: tasks stage for {topic}",
+            "source": "project-state-spec",
+        })
+        transitions.append({
+            "artifact": tp_id, "type": "test_prompt",
+            "from": None, "to": "draft",
+            "path": tp_path_rel,
+            "depends_on": [lp_id],
+            "reason": f"project-state-spec scaffold: tasks stage for {topic}",
+            "source": "project-state-spec",
+        })
+        written_pairs.append({
+            "slug": slug, "lp_id": lp_id, "tp_id": tp_id,
+            "lp_path": lp_path_rel, "tp_path": tp_path_rel,
+        })
+
+    # Landing README.
+    meta = status.get("meta", {}) or {}
+    fm_source_root = meta.get("source_root") or "<未配置>"
+    fm_scope = meta.get("scope")
+    fm_pst_root = meta.get("pst_root")
+
+    fm_lines = ["---", f'source_root: "{fm_source_root}"']
+    if fm_scope:
+        fm_lines.append("scope:")
+        for s in fm_scope:
+            fm_lines.append(f'  - "{s}"')
+    if fm_pst_root:
+        fm_lines.append(f'pst_root: "{fm_pst_root}"')
+    fm_lines.append("---")
+    front_matter = "\n".join(fm_lines)
+
+    sequence_tokens = []
+    for slug in lp_sequence:
+        match = next((p for p in written_pairs if p["slug"] == slugify(slug)), None)
+        if match:
+            sequence_tokens.append(f"{match['lp_id']}-{match['slug']}")
+    lp_seq_line = " -> ".join(sequence_tokens)
+
+    standards_section = ""
+    if coding_standards:
+        standards_section = f"\n## Coding Standards\n\n{coding_standards.strip()}\n"
+
+    readme_text = (
+        f"{front_matter}\n\n"
+        f"# Landing Prompts for {_topic_title(topic)}\n\n"
+        f"## LP 序列\n\n"
+        f"{lp_seq_line}\n"
+        f"{standards_section}"
+    )
+    readme_path = pst_root / "prompts" / "landing" / "README.md"
+    try:
+        safe_write(readme_path, readme_text, force=True)
+    except FileExistsRefuseError as exc:  # pragma: no cover - force=True
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    if fm_source_root == "<未配置>":
+        print(
+            "WARNING: meta.source_root is missing or placeholder. "
+            "Set it before running Execute-LandingPrompt.",
+            file=sys.stderr,
+        )
+
+    try:
+        _write_transitions_and_apply(
+            pst_root,
+            transitions,
+            event_summary=f"project-state-spec scaffold: tasks stage for {topic}",
+            event_type="spec_scaffold",
+        )
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+    except subprocess.CalledProcessError as exc:
+        print(f"ERROR: apply_changes.py failed (exit {exc.returncode}): {exc}",
+              file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+
+    print(json.dumps({"tasks": written_pairs}, ensure_ascii=False, indent=2))
+    return 0
 
 
 # ---------------------------------------------------------------------------

@@ -54,3 +54,43 @@ def load_status(pst_root: Path | str) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"status.yaml at {status_path} must be a mapping at top level")
     return data
+
+
+_VALID_PREFIXES = {"R", "D", "LP", "TP"}
+
+
+def next_id(status: dict, prefix: str) -> str:
+    """Return the next sequential id for ``prefix`` (one of R, D, LP, TP).
+
+    Scans ``status`` for any string id matching ``<prefix>-<NNN>`` across the
+    sections that may contain it (``artifacts``, plus the dedicated
+    ``research_findings`` / ``decisions`` lists). Returns the next number
+    zero-padded to 3 digits.
+    """
+    if prefix not in _VALID_PREFIXES:
+        raise ValueError(
+            f"Unknown id prefix: {prefix!r}. Expected one of {sorted(_VALID_PREFIXES)}."
+        )
+
+    pattern = _re.compile(rf"^{_re.escape(prefix)}-(\d+)$")
+    seen: list[int] = []
+
+    sections = ["artifacts"]
+    if prefix == "R":
+        sections.append("research_findings")
+    if prefix == "D":
+        sections.append("decisions")
+
+    for section in sections:
+        for entry in status.get(section, []) or []:
+            if not isinstance(entry, dict):
+                continue
+            entry_id = entry.get("id")
+            if not isinstance(entry_id, str):
+                continue
+            m = pattern.match(entry_id)
+            if m:
+                seen.append(int(m.group(1)))
+
+    next_num = (max(seen) + 1) if seen else 1
+    return f"{prefix}-{next_num:03d}"

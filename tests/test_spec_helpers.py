@@ -90,3 +90,51 @@ class TestLoadStatus:
         (tmp_path / "status" / "status.yaml").write_text("- a\n- b\n", encoding="utf-8")
         with pytest.raises(ValueError):
             load_status(tmp_path)
+
+
+from _spec_helpers import next_id  # noqa: E402
+
+
+class TestNextId:
+    def test_empty_returns_001(self):
+        status = {"artifacts": [], "research_findings": [], "decisions": []}
+        assert next_id(status, "R") == "R-001"
+        assert next_id(status, "D") == "D-001"
+        assert next_id(status, "LP") == "LP-001"
+        assert next_id(status, "TP") == "TP-001"
+
+    def test_continues_from_max(self):
+        status = {
+            "artifacts": [
+                {"id": "R-001", "type": "research_finding"},
+                {"id": "R-009", "type": "research_finding"},
+                {"id": "D-005", "type": "decision"},
+            ],
+            "research_findings": [
+                {"id": "R-001"},
+                {"id": "R-009"},
+            ],
+            "decisions": [
+                {"id": "D-005"},
+            ],
+        }
+        assert next_id(status, "R") == "R-010"
+        assert next_id(status, "D") == "D-006"
+
+    def test_pools_independent(self):
+        # Many R's must not affect the LP counter.
+        status = {
+            "artifacts": [{"id": f"R-{i:03d}"} for i in range(1, 50)] + [
+                {"id": "LP-002"}
+            ],
+        }
+        assert next_id(status, "LP") == "LP-003"
+        assert next_id(status, "TP") == "TP-001"
+
+    def test_handles_three_digit_pad(self):
+        status = {"artifacts": [{"id": "R-099"}]}
+        assert next_id(status, "R") == "R-100"
+
+    def test_unknown_prefix_raises(self):
+        with pytest.raises(ValueError):
+            next_id({"artifacts": []}, "ZZ")

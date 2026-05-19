@@ -222,7 +222,7 @@ class TestRequirementStage:
             "--r-content", str(r_body),
             "--d-content", str(d_body),
         )
-        assert result.returncode != 0
+        assert result.returncode == 3
         # Files should still exist (no rollback per Property 7).
         assert (tmp_path / "research" / "R-001-demo.md").is_file()
         assert (tmp_path / "decisions" / "D-001-demo.yaml").is_file()

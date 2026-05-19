@@ -223,8 +223,14 @@ def cmd_requirement(args: argparse.Namespace) -> int:
             event_summary=f"project-state-spec scaffold: requirement stage for {topic}",
             event_type="spec_scaffold",
         )
-    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
-        print(f"ERROR: apply_changes.py failed: {exc}", file=sys.stderr)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print("Files were written but status.yaml was not updated. "
+              "Run PST AUDIT to reconcile.", file=sys.stderr)
+        return 3
+    except subprocess.CalledProcessError as exc:
+        print(f"ERROR: apply_changes.py failed (exit {exc.returncode}): {exc}",
+              file=sys.stderr)
         print("Files were written but status.yaml was not updated. "
               "Run PST AUDIT to reconcile.", file=sys.stderr)
         return 3

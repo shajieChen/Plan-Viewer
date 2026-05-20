@@ -52,6 +52,8 @@ VALID_TYPES: set[str] = {
     "plan",
     "landing_prompt",
     "test_prompt",
+    "research",
+    "decision",
 }
 
 VALID_DEP_TYPES: set[str] = {
@@ -175,6 +177,84 @@ def _derive_group_from_id(artifact_id: str) -> str:
         return "CodeGen"
     else:
         return "Other"
+
+
+def _extract_topic_from_plan_id(plan_id: str) -> str:
+    """Extract group name from a Plan artifact ID.
+
+    1. Strip 'Plan.' prefix
+    2. If remainder matches Phase\\d+.* → return 'Phase{N}'
+    3. If remainder contains 'codegen' → return 'CodeGen'
+    4. Otherwise return remainder as-is (e.g. 'PR3_Runtime')
+    """
+    import re as _re
+
+    # Strip Plan. prefix
+    remainder = plan_id
+    if remainder.startswith("Plan."):
+        remainder = remainder[5:]
+
+    # Check for PhaseN pattern
+    phase_match = _re.match(r"[Pp]hase(\d+)", remainder)
+    if phase_match:
+        return f"Phase{phase_match.group(1)}"
+
+    # Check for codegen
+    if "codegen" in remainder.lower():
+        return "CodeGen"
+
+    # Return as-is (the topic name)
+    return remainder if remainder else "Other"
+
+
+def _find_root_plan(
+    artifact: "Artifact",
+    artifact_by_id: dict[str, "Artifact"],
+    raw_artifacts: list[dict],
+) -> "Artifact | None":
+    """BFS walk through depends_on to find the nearest Plan ancestor.
+
+    Max depth: 5. Returns the first Plan found, or None.
+    """
+    # Build a lookup from artifact id to its raw depends_on list
+    raw_deps_by_id: dict[str, list[str]] = {}
+    for a in raw_artifacts:
+        aid = a.get("id", "")
+        deps = a.get("depends_on", []) or []
+        dep_ids = []
+        for d in deps:
+            if isinstance(d, str):
+                dep_ids.append(d)
+            elif isinstance(d, dict):
+                dep_ids.append(d.get("id", ""))
+        raw_deps_by_id[aid] = dep_ids
+
+    # BFS
+    from collections import deque
+    queue: deque[tuple[str, int]] = deque()
+    visited: set[str] = {artifact.id}
+
+    for dep_id in raw_deps_by_id.get(artifact.id, []):
+        if dep_id and dep_id not in visited:
+            queue.append((dep_id, 1))
+            visited.add(dep_id)
+
+    while queue:
+        current_id, depth = queue.popleft()
+        if depth > 5:
+            continue
+
+        current = artifact_by_id.get(current_id)
+        if current and current.type == "plan":
+            return current
+
+        # Continue BFS
+        for dep_id in raw_deps_by_id.get(current_id, []):
+            if dep_id and dep_id not in visited:
+                queue.append((dep_id, depth + 1))
+                visited.add(dep_id)
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +478,10 @@ def inject_into_template(
 REQUIRED_STATUS_KEYS: set[str] = {
     "meta",
     "artifacts",
+}
+
+# Keys that are used if present but not required for dashboard rendering
+OPTIONAL_STATUS_KEYS: set[str] = {
     "research_findings",
     "decisions",
     "assumptions",
@@ -618,6 +702,46 @@ class ProjectReader:
                 group=derive_group(a),
             )
             artifacts.append(artifact)
+
+        # --- Post-process: dependency-chain group inference ---
+        # For artifacts with group="Other", try to infer group from Plan ancestors
+        # via depends_on chain (BFS, max depth 5)
+        artifact_by_id: dict[str, Artifact] = {a.id: a for a in artifacts}
+
+        # Pass 1: For LP/TP with group="Other", walk depends_on to find a Plan ancestor
+        # and use that Plan's topic as the group name
+        for artifact in artifacts:
+            if artifact.group != "Other":
+                continue
+            if artifact.type not in ("landing_prompt", "test_prompt", "research"):
+                continue
+            root_plan = _find_root_plan(artifact, artifact_by_id, raw_artifacts)
+            if root_plan:
+                topic = _extract_topic_from_plan_id(root_plan.id)
+                if topic != "Other":
+                    artifact.group = topic
+
+        # Pass 2: For Plans with group="Other", check if any of their dependents
+        # got assigned a non-"Other" group via Pass 1. If so, assign the same group
+        # to the Plan so it appears in the same column.
+        # Build reverse map: plan_id -> groups assigned to its dependents
+        plan_dependent_groups: dict[str, set[str]] = {}
+        for a in raw_artifacts:
+            deps = a.get("depends_on", []) or []
+            for d in deps:
+                dep_id = d if isinstance(d, str) else d.get("id", "") if isinstance(d, dict) else ""
+                if dep_id:
+                    art = artifact_by_id.get(a.get("id", ""))
+                    if art and art.group != "Other":
+                        plan_dependent_groups.setdefault(dep_id, set()).add(art.group)
+
+        for artifact in artifacts:
+            if artifact.group == "Other" and artifact.type == "plan":
+                topic = _extract_topic_from_plan_id(artifact.id)
+                # Only assign if the topic matches a group that dependents use
+                dep_groups = plan_dependent_groups.get(artifact.id, set())
+                if topic in dep_groups:
+                    artifact.group = topic
 
         # Build Dependency dataclass instances
         dependencies: list[Dependency] = [

@@ -245,7 +245,7 @@ pub fn read_all_projects(projects_json_path: &Path) -> Result<DashboardData, Str
 
     for entry in &entries {
         let project_path = Path::new(&entry.path);
-        match read_project(project_path) {
+        let (name, data) = match read_project(project_path) {
             Ok(data) => {
                 let name = data
                     .meta
@@ -259,12 +259,27 @@ pub fn read_all_projects(projects_json_path: &Path) -> Result<DashboardData, Str
                             .unwrap_or("unknown")
                     })
                     .to_string();
-                projects.insert(name, data);
+                (name, data)
             }
-            Err(e) => {
-                eprintln!("Warning: skipping project {}: {}", entry.path, e);
+            Err(_e) => {
+                // Project lacks status.yaml or is unreadable — still show it in the list
+                // with an empty placeholder so the user can see it and delete if needed.
+                let name = project_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_str()
+                    .unwrap_or("unknown")
+                    .to_string();
+                let placeholder = ProjectData {
+                    meta: serde_yaml::Value::Null,
+                    artifacts: vec![],
+                    change_events: vec![],
+                    markdown_previews: HashMap::new(),
+                };
+                (name, placeholder)
             }
-        }
+        };
+        projects.insert(name, data);
     }
 
     Ok(DashboardData { projects })

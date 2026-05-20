@@ -35,6 +35,7 @@ pub fn projects_json_path() -> PathBuf {
 /// Normalize a path by resolving `.`, `..`, trailing separators, and producing
 /// an absolute path. Uses `std::fs::canonicalize` when the path exists on disk;
 /// otherwise falls back to manual component-based normalization.
+/// On Windows, strips the `\\?\` extended-length prefix that canonicalize adds.
 pub(crate) fn normalize_path(input: &str) -> Result<PathBuf, AddProjectError> {
     let path = PathBuf::from(input);
     let canonical = std::fs::canonicalize(&path).unwrap_or_else(|_| {
@@ -51,17 +52,29 @@ pub(crate) fn normalize_path(input: &str) -> Result<PathBuf, AddProjectError> {
         }
         result
     });
+
+    // On Windows, canonicalize produces \\?\ prefix — strip it for cleaner paths
+    #[cfg(windows)]
+    {
+        let s = canonical.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(r"\\?\") {
+            return Ok(PathBuf::from(stripped));
+        }
+    }
+
     Ok(canonical)
 }
 
 /// Normalize a path string for comparison purposes.
-/// On Windows: lowercases and normalizes all slashes to backslash.
+/// On Windows: strips `\\?\` extended-length prefix, lowercases, and normalizes
+/// all slashes to backslash.
 /// On all platforms: strips trailing path separators.
 pub(crate) fn normalize_for_compare(path: &str) -> String {
     let p = path.trim_end_matches(['/', '\\']);
     #[cfg(windows)]
     {
-        p.to_lowercase().replace('/', "\\")
+        let stripped = p.strip_prefix(r"\\?\").unwrap_or(p);
+        stripped.to_lowercase().replace('/', "\\")
     }
     #[cfg(not(windows))]
     {

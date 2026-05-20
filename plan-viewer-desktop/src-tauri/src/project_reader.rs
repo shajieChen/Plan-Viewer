@@ -27,6 +27,178 @@ pub fn derive_group(artifact_id: &str) -> String {
     }
 }
 
+/// Extract topic name from a Plan artifact ID for group naming.
+fn extract_topic_from_plan_id(plan_id: &str) -> String {
+    let remainder = if plan_id.starts_with("Plan.") {
+        &plan_id[5..]
+    } else {
+        plan_id
+    };
+
+    // Check for PhaseN pattern
+    let lower = remainder.to_lowercase();
+    if lower.starts_with("phase") {
+        if let Some(digit_start) = lower.find(|c: char| c.is_ascii_digit()) {
+            let digits: String = lower[digit_start..]
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            if !digits.is_empty() {
+                return format!("Phase{}", digits);
+            }
+        }
+    }
+
+    // Check for codegen
+    if lower.contains("codegen") {
+        return "CodeGen".to_string();
+    }
+
+    // Return remainder as-is
+    if remainder.is_empty() {
+        "Other".to_string()
+    } else {
+        remainder.to_string()
+    }
+}
+
+/// Resolve depends_on entries to string IDs.
+fn resolve_dep_ids(deps: &[serde_yaml::Value]) -> Vec<String> {
+    deps.iter()
+        .filter_map(|d| match d {
+            serde_yaml::Value::String(s) => Some(s.clone()),
+            serde_yaml::Value::Mapping(m) => m
+                .get(&serde_yaml::Value::String("id".to_string()))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// BFS to find the nearest Plan ancestor via depends_on chain (max depth 5).
+fn find_root_plan_id(
+    artifact_id: &str,
+    artifact_type_map: &HashMap<String, String>,
+    deps_map: &HashMap<String, Vec<String>>,
+) -> Option<String> {
+    use std::collections::VecDeque;
+
+    let mut queue: VecDeque<(String, usize)> = VecDeque::new();
+    let mut visited: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    visited.insert(artifact_id.to_string());
+
+    if let Some(deps) = deps_map.get(artifact_id) {
+        for dep_id in deps {
+            if !dep_id.is_empty() && visited.insert(dep_id.clone()) {
+                queue.push_back((dep_id.clone(), 1));
+            }
+        }
+    }
+
+    while let Some((current_id, depth)) = queue.pop_front() {
+        if depth > 5 {
+            continue;
+        }
+        if let Some(t) = artifact_type_map.get(&current_id) {
+            if t == "plan" {
+                return Some(current_id);
+            }
+        }
+        if let Some(deps) = deps_map.get(&current_id) {
+            for dep_id in deps {
+                if !dep_id.is_empty() && visited.insert(dep_id.clone()) {
+                    queue.push_back((dep_id.clone(), depth + 1));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Post-process artifacts: infer groups from dependency chains for artifacts with group="Other".
+fn infer_groups_from_dependencies(
+    artifacts: &mut Vec<Artifact>,
+    raw_artifacts: &[serde_yaml::Value],
+) {
+    // Build lookup maps
+    let mut artifact_type_map: HashMap<String, String> = HashMap::new();
+    let mut deps_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for raw in raw_artifacts {
+        let id = raw.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let atype = raw.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let deps = raw
+            .get("depends_on")
+            .and_then(|v| v.as_sequence())
+            .cloned()
+            .unwrap_or_default();
+        artifact_type_map.insert(id.clone(), atype);
+        deps_map.insert(id, resolve_dep_ids(&deps));
+    }
+
+    // Build reverse dependency map: plan_id -> set of artifact ids that depend on it
+    let mut plan_has_dependents: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    for (aid, dep_ids) in &deps_map {
+        for dep_id in dep_ids {
+            if artifact_type_map.get(dep_id).map(|t| t.as_str()) == Some("plan") {
+                plan_has_dependents.insert(dep_id.clone());
+            }
+        }
+        let _ = aid; // suppress unused warning
+    }
+
+    // Pass 1: For LP/TP/research with group="Other", find root Plan and use its topic
+    let mut inferred_groups: HashMap<String, String> = HashMap::new();
+    for artifact in artifacts.iter() {
+        if artifact.group != "Other" {
+            continue;
+        }
+        if !matches!(
+            artifact.artifact_type.as_str(),
+            "landing_prompt" | "test_prompt" | "research"
+        ) {
+            continue;
+        }
+        if let Some(plan_id) = find_root_plan_id(&artifact.id, &artifact_type_map, &deps_map) {
+            let topic = extract_topic_from_plan_id(&plan_id);
+            if topic != "Other" {
+                inferred_groups.insert(artifact.id.clone(), topic);
+            }
+        }
+    }
+
+    // Apply inferred groups
+    for artifact in artifacts.iter_mut() {
+        if let Some(group) = inferred_groups.get(&artifact.id) {
+            artifact.group = group.clone();
+        }
+    }
+
+    // Collect which topics are actually used by LP/TP
+    let used_topics: std::collections::HashSet<String> = artifacts
+        .iter()
+        .filter(|a| a.group != "Other" && matches!(a.artifact_type.as_str(), "landing_prompt" | "test_prompt" | "research"))
+        .map(|a| a.group.clone())
+        .collect();
+
+    // Pass 2: For Plans with group="Other" that have dependents using a matching topic, assign that topic
+    for artifact in artifacts.iter_mut() {
+        if artifact.group != "Other" || artifact.artifact_type != "plan" {
+            continue;
+        }
+        if !plan_has_dependents.contains(&artifact.id) {
+            continue;
+        }
+        let topic = extract_topic_from_plan_id(&artifact.id);
+        if topic != "Other" && used_topics.contains(&topic) {
+            artifact.group = topic;
+        }
+    }
+}
+
 /// Load projects from projects.json at the given path.
 pub fn load_projects(projects_json_path: &Path) -> Result<Vec<ProjectEntry>, String> {
     if !projects_json_path.exists() {
@@ -167,7 +339,12 @@ pub fn read_project(project_path: &Path) -> Result<ProjectData, String> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        let group = derive_group(&id);
+        let group = raw
+            .get("group")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| derive_group(&id));
 
         let depends_on = raw
             .get("depends_on")
@@ -194,6 +371,10 @@ pub fn read_project(project_path: &Path) -> Result<ProjectData, String> {
             group,
         });
     }
+
+    // --- Post-process: dependency-chain group inference ---
+    // For artifacts with group="Other", infer group from Plan ancestors via depends_on
+    infer_groups_from_dependencies(&mut artifacts, &raw_artifacts);
 
     // Parse change_events
     let raw_events = data

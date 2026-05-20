@@ -393,13 +393,16 @@
                 return grouped;
             }, [visibleArtifacts]);
 
-            // Ordered group names for consistent rendering
-            const GROUP_ORDER = ['Phase1', 'Phase2', 'Phase3', 'Phase4', 'Phase5', 'CodeGen', 'Other'];
+            // Dynamically derive ordered group names from data
+            const GROUP_ORDER = useMemo(() => {
+                const allGroups = Object.keys(groups);
+                return sortGroups(allGroups);
+            }, [groups]);
 
             // Get visible group names (non-empty groups only)
             const visibleGroups = useMemo(() => {
                 return GROUP_ORDER.filter(g => groups[g] && groups[g].length > 0);
-            }, [groups]);
+            }, [groups, GROUP_ORDER]);
 
             // Build set of visible node IDs (not filtered and not in collapsed groups)
             const visibleNodeIds = useMemo(() => {

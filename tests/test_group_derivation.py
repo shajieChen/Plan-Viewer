@@ -298,3 +298,50 @@ class TestGroupDerivationCaseInsensitivity:
         # (phase1 is highest priority, so this is always safe)
         result = derive_group(artifact_id)
         assert result == "Phase1"
+
+
+class TestGroupDerivationExplicitField:
+    """Tests for explicit group field taking priority over ID matching."""
+
+    def test_explicit_group_field_takes_priority(self):
+        """When artifact dict has a non-empty 'group' field, it is returned directly."""
+        artifact = {"id": "Plan.Phase1-Something", "group": "CustomGroup"}
+        result = derive_group(artifact)
+        assert result == "CustomGroup"
+
+    def test_empty_group_field_falls_back_to_id(self):
+        """When artifact dict has group='', falls back to ID matching."""
+        artifact = {"id": "Plan.Phase1-Something", "group": ""}
+        result = derive_group(artifact)
+        assert result == "Phase1"
+
+    def test_missing_group_field_falls_back_to_id(self):
+        """When artifact dict has no 'group' key, falls back to ID matching."""
+        artifact = {"id": "Plan.Phase2-Registry"}
+        result = derive_group(artifact)
+        assert result == "Phase2"
+
+    def test_string_input_backward_compat(self):
+        """Passing a plain string still works (backward compat)."""
+        result = derive_group("Plan.Phase3-Fragment")
+        assert result == "Phase3"
+
+    def test_explicit_group_overrides_phase_keyword(self):
+        """Explicit group wins even when ID contains a phase keyword."""
+        artifact = {"id": "Plan.Phase1-BitStream", "group": "CodeGen"}
+        result = derive_group(artifact)
+        assert result == "CodeGen"
+
+    def test_no_id_no_group_returns_other(self):
+        """Artifact with no id and no group returns 'Other'."""
+        artifact = {"id": "", "group": ""}
+        result = derive_group(artifact)
+        assert result == "Other"
+
+    @given(group_name=st.text(min_size=1, max_size=30).filter(lambda s: s.strip()))
+    @settings(max_examples=30)
+    def test_any_nonempty_group_returned_directly(self, group_name: str):
+        """Any non-empty group string is returned as-is."""
+        artifact = {"id": "anything", "group": group_name}
+        result = derive_group(artifact)
+        assert result == group_name

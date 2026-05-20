@@ -73,6 +73,7 @@ fn ensure_dashboard_server() {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // 已有实例运行时，将已有窗口显示并聚焦
             if let Some(window) = app.get_webview_window("main") {
@@ -87,6 +88,9 @@ fn main() {
             commands::read_window_sizes,
             commands::write_window_sizes,
             commands::update_artifact_status,
+            commands::add_project,
+            commands::delete_project,
+            commands::resolve_project_path,
         ])
         .setup(|app| {
             // --- Auto-start Dashboard Server ---

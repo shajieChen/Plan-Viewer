@@ -93,3 +93,29 @@ pub struct UpdateStatusResponse {
     pub artifact_id: String,
     pub new_status: String,
 }
+
+/// Response from a successful add_project command
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddProjectResponse {
+    pub path: String,
+    pub not_initialized: bool,
+}
+
+/// Response from a successful delete_project command
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteProjectResponse {
+    pub path: String,
+}
+
+/// Error from add_project command — serialized as Tauri command error
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddProjectError {
+    pub code: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for AddProjectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}

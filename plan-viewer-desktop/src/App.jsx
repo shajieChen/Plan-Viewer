@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
+import { invoke } from '@tauri-apps/api/core';
 import { TitleBar } from './components/TitleBar.jsx';
+import { Toast } from './components/Toast.jsx';
 import { SwimLane } from './components/SwimLane.jsx';
 import { CompactView } from './components/CompactView.jsx';
 import { DetailPanel } from './components/DetailPanel.jsx';
@@ -12,7 +14,7 @@ import { useRememberedSize } from './hooks/useRememberedSize.js';
 export function App() {
   const { opacityState, cursorPresent } = useWindowHover();
   const [autoShrink, setAutoShrink] = useState(true);
-  const { data, loading, error, selectedProject, setSelectedProject } = useProjects();
+  const { data, loading, error, selectedProject, setSelectedProject, refresh } = useProjects();
 
   // Circular dependency resolution between useRememberedSize and useWindowAutoShrink:
   // - useRememberedSize needs savedSize for persistence
@@ -40,6 +42,8 @@ export function App() {
   const [showReadme, setShowReadme] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
+  const [toast, setToast] = useState(null); // { message, type } | null
+  const [pendingProjectPath, setPendingProjectPath] = useState(null);
   const [notFoundToast, setNotFoundToast] = useState(null);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
@@ -61,6 +65,35 @@ export function App() {
 
   const projectNames = data ? Object.keys(data.projects) : [];
 
+  // Handle deleting the currently selected project
+  const handleDeleteProject = async () => {
+    if (!selectedProject || !data) return;
+
+    // Resolve the full path for the selected project via backend
+    let fullPath;
+    try {
+      fullPath = await invoke('resolve_project_path', { projectName: selectedProject });
+    } catch (_) {
+      return;
+    }
+
+    // Confirmation dialog with project name
+    const confirmed = window.confirm(`确认删除工程 "${selectedProject}"？\n（仅从列表移除，不删除磁盘文件）`);
+    if (!confirmed) return;
+
+    try {
+      await invoke('delete_project', { path: fullPath });
+      setToast({ message: '工程已删除', type: 'info' });
+      setSelectedArtifact(null);
+      setShowReadme(false);
+      // Explicitly refresh project list to remove deleted project from UI
+      await refresh();
+    } catch (e) {
+      const msg = typeof e === 'string' ? e : (e && e.message ? e.message : JSON.stringify(e));
+      setToast({ message: msg, type: 'error' });
+    }
+  };
+
   // Handle dependency navigation
   const handleNavigateDep = (depId) => {
     if (isCompact) return; // SwimLane not rendered in compact mode
@@ -74,6 +107,36 @@ export function App() {
     }
   };
 
+  // Handle adding a new project via the backend command
+  const handleAddProject = async (path) => {
+    try {
+      const result = await invoke('add_project', { path });
+      setPendingProjectPath(result.path);
+      if (result.not_initialized) {
+        setToast({ message: '该目录不是合规项目，需要先初始化', type: 'info' });
+      }
+    } catch (e) {
+      const msg = typeof e === 'string' ? e : (e && e.message ? e.message : JSON.stringify(e));
+      setToast({ message: msg, type: 'error' });
+    }
+  };
+
+  // Auto-select newly added project after refresh
+  useEffect(() => {
+    if (pendingProjectPath && data) {
+      // Extract the last path segment (directory name) from the pending path
+      const normalized = pendingProjectPath.replace(/[\\/]+$/, '');
+      const basename = normalized.split(/[\\/]/).pop();
+      const match = Object.keys(data.projects).find(
+        (name) => name === basename
+      );
+      if (match) {
+        setSelectedProject(match);
+        setPendingProjectPath(null);
+      }
+    }
+  }, [data, pendingProjectPath]);
+
   return (
     <div class={`app-container ${opacityState}`}>
       <TitleBar
@@ -81,7 +144,9 @@ export function App() {
         onToggleAutoShrink={() => setAutoShrink(prev => !prev)}
         showReadme={showReadme}
         onToggleReadme={() => setShowReadme(prev => !prev)}
+        onAddProject={handleAddProject}
       />
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
 
       {/* Project selector */}
       {projectNames.length > 1 && (
@@ -98,6 +163,28 @@ export function App() {
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
+          <button
+            className="delete-project-btn"
+            onClick={handleDeleteProject}
+            title="删除工程"
+            aria-label="删除工程"
+          >
+            🗑️
+          </button>
+        </div>
+      )}
+
+      {projectNames.length === 1 && (
+        <div class="project-selector single-project">
+          <span className="single-project-name">{projectNames[0]}</span>
+          <button
+            className="delete-project-btn"
+            onClick={handleDeleteProject}
+            title="删除工程"
+            aria-label="删除工程"
+          >
+            🗑️
+          </button>
         </div>
       )}
 

@@ -1,8 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useState } from 'preact/hooks';
 
-export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme }) {
+export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme, onAddProject }) {
   const [pinned, setPinned] = useState(true);
 
   const togglePin = async () => {
@@ -14,6 +15,13 @@ export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = f
   const hideWindow = async () => {
     const win = getCurrentWindow();
     await win.hide();
+  };
+
+  const handleAddProject = async () => {
+    const selected = await open({ directory: true, title: '选择工程目录' });
+    if (selected) {
+      onAddProject(selected);
+    }
   };
 
   return (
@@ -34,6 +42,9 @@ export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = f
         class={`readme-toggle ${showReadme ? 'active' : ''}`}
       >
         📖
+      </button>
+      <button onClick={handleAddProject} title="添加工程">
+        📂
       </button>
       <button onClick={hideWindow} title="最小化到托盘">
         ✕

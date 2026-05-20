@@ -8,9 +8,11 @@ Project State Tracker 的交互式可视化 Dashboard — 桌面版 (Tauri) + �
 - 点击节点查看详情、依赖、change_events
 - 内置 Markdown 预览（README 导读 + artifact 文件）
 - 类型 Filter（Plan / LP / TP / Research / Decision）
-- 多项目切换（`projects.json`）
+- 多项目切换（`projects.json`）+ 添加/删除工程
 - Glassmorphism 暗色/亮色主题
 - 窗口记忆尺寸 + 自动缩小/恢复（dwell 机制）
+- Toast 通知反馈（操作成功/失败）
+- 状态点击交互（直接修改 artifact 状态）
 
 ## 演示
 

@@ -9,6 +9,8 @@
 - 多项目管理（添加/删除/切换）
 - Glassmorphism 暗色主题 + 窗口自动缩放
 - 状态点击交互（直接修改 artifact 状态）
+- **Smart Group Derivation** — 依赖链聚类自动推导分组列，无需硬编码命名规则
+- **ELP Result 持久化** — 执行结果归档至 `Result/` 目录，支持历史回溯
 
 ## 快速开始
 
@@ -32,7 +34,7 @@ Tauri · Preact · Vite · Python · PyYAML · Mermaid.js · marked.js
 | [project-state-spec](https://github.com/shajieChen/kiro-skill-project-state-spec) | 三阶段 Spec 编写 (R→D→Task) |
 | [Execute-LandingPrompt](https://github.com/shajieChen/kiro-skill-execute-landingprompt) | 执行 LP 并回流状态 |
 | [module-quick-analysis](https://github.com/shajieChen/kiro-skill-module-quick-analysis) | 模块快速分析 |
-| [OpenSpec](https://github.com/shajieChen/kiro-skill-OpenSpec) | Spec 打开/导航 |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | Spec 打开/导航 |
 
 ## Skill 闭环
 

@@ -162,6 +162,35 @@
             archived: '#d1d5db',
         };
 
+        // Sort group names: Phase1..N first (numeric), then alphabetical, "Other" last
+        function sortGroups(groups) {
+            const phaseRegex = /^Phase(\d+)$/i;
+            const phases = [];
+            const others = [];
+            let hasOther = false;
+
+            groups.forEach(g => {
+                const match = g.match(phaseRegex);
+                if (match) {
+                    phases.push({ name: g, num: parseInt(match[1]) });
+                } else if (g === 'Other') {
+                    hasOther = true;
+                } else {
+                    others.push(g);
+                }
+            });
+
+            phases.sort((a, b) => a.num - b.num);
+            others.sort((a, b) => a.localeCompare(b));
+
+            const result = [
+                ...phases.map(p => p.name),
+                ...others,
+            ];
+            if (hasOther) result.push('Other');
+            return result;
+        }
+
         // Parse embedded JSON data
         function loadAppData() {
             const el = document.getElementById('app-data');
@@ -176,7 +205,10 @@
 
         // Swim Lane View component
         function SwimLaneView({ artifacts, activeFilters, onArtifactSelect }) {
-            const GROUPS = ['Phase1', 'Phase2', 'Phase3', 'Phase4', 'Phase5', 'CodeGen', 'Other'];
+            const GROUPS = useMemo(() => {
+                const groupSet = new Set(artifacts.map(a => a.group || 'Other'));
+                return sortGroups([...groupSet]);
+            }, [artifacts]);
             const ALL_TYPES = ['plan', 'landing_prompt', 'test_prompt'];
 
             // Filter to only show rows for active types
@@ -197,7 +229,7 @@
                     }
                 });
                 return map;
-            }, [artifacts]);
+            }, [artifacts, GROUPS]);
 
             if (visibleTypes.length === 0) {
                 return (

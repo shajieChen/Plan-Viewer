@@ -330,6 +330,19 @@ fn resolve_project_path_impl(project_name: &str) -> Result<PathBuf, String> {
     for entry in &entries {
         let project_path = Path::new(&entry.path);
         let status_file = project_path.join("status").join("status.yaml");
+
+        // First try matching by directory name (works for all projects)
+        let dir_name = project_path
+            .file_name()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or("");
+
+        if dir_name == project_name {
+            return Ok(project_path.to_path_buf());
+        }
+
+        // Then try matching by meta.project_name from status.yaml
         if !status_file.exists() {
             continue;
         }
@@ -347,13 +360,7 @@ fn resolve_project_path_impl(project_name: &str) -> Result<PathBuf, String> {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
-        let dir_name = project_path
-            .file_name()
-            .unwrap_or_default()
-            .to_str()
-            .unwrap_or("");
-
-        if meta_name == project_name || dir_name == project_name {
+        if meta_name == project_name {
             return Ok(project_path.to_path_buf());
         }
     }

@@ -14,3 +14,7 @@
 	path = Tools/Skills/OpenSpec
 	url = https://github.com/Fission-AI/OpenSpec.git
 	branch = main
+[submodule "Tools/Skills/module-quick-analysis"]
+	path = Tools/Skills/module-quick-analysis
+	url = https://github.com/shajieChen/kiro-skill-module-quick-analysis.git
+	branch = main

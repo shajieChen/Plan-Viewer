@@ -132,8 +132,31 @@ class DashboardData:
 # Group Derivation
 # ---------------------------------------------------------------------------
 
-def derive_group(artifact_id: str) -> str:
-    """Derive phase group from artifact ID using case-insensitive priority matching.
+def derive_group(artifact: dict | str) -> str:
+    """Derive group for an artifact.
+
+    Accepts either a full artifact dict or a plain artifact ID string
+    (for backward compatibility with existing callers/tests).
+
+    Priority:
+    1. Explicit 'group' field from status.yaml (if artifact is a dict)
+    2. Fallback: keyword matching on artifact ID
+    """
+    if isinstance(artifact, str):
+        # Backward compat: called with just an ID string
+        return _derive_group_from_id(artifact)
+
+    # Priority 1: explicit group field
+    group = artifact.get("group", "")
+    if group:
+        return group
+
+    # Priority 2: fallback to ID-based keyword matching
+    return _derive_group_from_id(artifact.get("id", ""))
+
+
+def _derive_group_from_id(artifact_id: str) -> str:
+    """Legacy ID-based keyword matching (backward compat fallback).
 
     Priority order: phase1, phase2, phase3, phase4, phase5, codegen, then "Other".
     """
@@ -592,7 +615,7 @@ class ProjectReader:
                 produces_handoffs=a.get("produces_handoffs", []) or [],
                 consumes_handoffs=a.get("consumes_handoffs", []) or [],
                 last_checked=a.get("last_checked", ""),
-                group=derive_group(a.get("id", "")),
+                group=derive_group(a),
             )
             artifacts.append(artifact)
 

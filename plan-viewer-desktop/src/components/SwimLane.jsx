@@ -21,9 +21,33 @@ export function SwimLane({ artifacts, onSelectArtifact, highlightedId }) {
     groups[group].push(artifact);
   }
 
-  // Define column order
-  const columnOrder = ['Phase1', 'Phase2', 'Phase3', 'Phase4', 'Phase5', 'CodeGen', 'Other'];
-  const activeColumns = columnOrder.filter((col) => groups[col] && groups[col].length > 0);
+  // Dynamically derive column order from data, sorted:
+  // Phase1..N first (numeric), then alphabetical, "Other" last
+  const allGroups = Object.keys(groups);
+  const phaseRegex = /^Phase(\d+)$/i;
+  const phases = [];
+  const others = [];
+  let hasOther = false;
+
+  allGroups.forEach(g => {
+    const match = g.match(phaseRegex);
+    if (match) {
+      phases.push({ name: g, num: parseInt(match[1]) });
+    } else if (g === 'Other') {
+      hasOther = true;
+    } else {
+      others.push(g);
+    }
+  });
+
+  phases.sort((a, b) => a.num - b.num);
+  others.sort((a, b) => a.localeCompare(b));
+
+  const activeColumns = [
+    ...phases.map(p => p.name),
+    ...others,
+  ];
+  if (hasOther) activeColumns.push('Other');
 
   if (activeColumns.length === 0) {
     return <div class="swimlane-empty">No artifacts found</div>;

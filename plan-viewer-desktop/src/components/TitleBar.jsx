@@ -3,7 +3,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useState } from 'preact/hooks';
 
-export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme, onAddProject }) {
+export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme, onAddProject, boundProcess = null, onFocusClick, onUnbind, focusBtnRef }) {
   const [pinned, setPinned] = useState(true);
 
   const togglePin = async () => {
@@ -46,6 +46,19 @@ export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = f
       <button onClick={handleAddProject} title="添加工程">
         📂
       </button>
+      <button
+        ref={focusBtnRef}
+        onClick={onFocusClick}
+        title={boundProcess ? `聚焦: ${boundProcess.processName}` : '未绑定进程'}
+        class={`focus-btn ${boundProcess ? 'bound' : 'unbound'}`}
+      >
+        🎯
+      </button>
+      {boundProcess && (
+        <button onClick={onUnbind} title="取消绑定" class="unbind-btn">
+          ✖
+        </button>
+      )}
       <button onClick={hideWindow} title="最小化到托盘">
         ✕
       </button>

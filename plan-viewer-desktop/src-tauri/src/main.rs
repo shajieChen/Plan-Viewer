@@ -2,6 +2,7 @@
 
 mod commands;
 mod models;
+mod process_focus;
 mod project_reader;
 mod watcher;
 
@@ -91,6 +92,12 @@ fn main() {
             commands::add_project,
             commands::delete_project,
             commands::resolve_project_path,
+            process_focus::bind_process,
+            process_focus::enumerate_processes,
+            process_focus::focus_bound_window,
+            process_focus::read_process_bindings,
+            process_focus::write_process_binding,
+            process_focus::remove_process_binding,
         ])
         .setup(|app| {
             // --- Auto-start Dashboard Server ---

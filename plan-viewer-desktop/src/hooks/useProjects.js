@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -12,6 +12,12 @@ export function useProjects() {
   const [error, setError] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
 
+  // Keep a ref to the latest selectedProject so refresh() never has a stale closure
+  const selectedProjectRef = useRef(selectedProject);
+  useEffect(() => {
+    selectedProjectRef.current = selectedProject;
+  }, [selectedProject]);
+
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
@@ -20,9 +26,10 @@ export function useProjects() {
       setError(null);
 
       // Auto-select first project if none selected or current selection is gone
+      const current = selectedProjectRef.current;
       if (result && result.projects) {
         const keys = Object.keys(result.projects);
-        if (keys.length > 0 && (!selectedProject || !result.projects[selectedProject])) {
+        if (keys.length > 0 && (!current || !result.projects[current])) {
           setSelectedProject(keys[0]);
         }
       }
@@ -31,7 +38,7 @@ export function useProjects() {
     } finally {
       setLoading(false);
     }
-  }, [selectedProject]);
+  }, []);
 
   // Initial load
   useEffect(() => {

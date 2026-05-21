@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'preact/hooks';
+import { invoke } from '@tauri-apps/api/core';
 import { marked } from 'marked';
 import { STATUS_COLORS, VALID_STATUSES, getStatusColor } from '../utils/statusConstants.js';
 
@@ -34,10 +35,10 @@ export function DetailPanel({ artifact, changeEvents, markdownPreview, onClose, 
         setTimeout(() => reject(new Error('Request timed out')), 10000)
       );
 
-      const invokePromise = window.__TAURI__.core.invoke('update_artifact_status', {
-        project_name: projectName,
-        artifact_id: artifact.id,
-        new_status: newStatus,
+      const invokePromise = invoke('update_artifact_status', {
+        projectName: projectName,
+        artifactId: artifact.id,
+        newStatus: newStatus,
       });
 
       await Promise.race([invokePromise, timeoutPromise]);

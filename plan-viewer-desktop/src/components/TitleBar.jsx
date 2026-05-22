@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useState } from 'preact/hooks';
+import huskyIcon from '../assets/husky-icon.png';
 
 export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = false, onToggleReadme, onAddProject, boundProcess = null, onFocusClick, onUnbind, focusBtnRef }) {
   const [pinned, setPinned] = useState(true);
@@ -26,6 +27,7 @@ export function TitleBar({ autoShrink = true, onToggleAutoShrink, showReadme = f
 
   return (
     <div class="title-bar" data-tauri-drag-region>
+      <img src={huskyIcon} alt="Plan Viewer" class="app-logo" width="20" height="20" />
       <button onClick={togglePin} title={pinned ? '取消置顶' : '置顶'}>
         {pinned ? '📌' : '📍'}
       </button>

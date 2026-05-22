@@ -52,6 +52,13 @@ html, body, #app {
   gap: 4px;
 }
 
+.title-bar .app-logo {
+  margin-right: auto;
+  border-radius: 4px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
 .title-bar button {
   background: none;
   border: none;

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="#4A90D9"/>
+  
+  <!-- Husky face - main shape -->
+  <ellipse cx="256" cy="280" rx="160" ry="170" fill="#E8E8E8"/>
+  
+  <!-- Dark fur patches (ears and forehead) -->
+  <path d="M 130 180 Q 100 80 140 60 Q 180 50 200 120 L 180 180 Z" fill="#3D3D3D"/>
+  <path d="M 382 180 Q 412 80 372 60 Q 332 50 312 120 L 332 180 Z" fill="#3D3D3D"/>
+  
+  <!-- Forehead dark patch -->
+  <path d="M 200 120 Q 220 100 256 95 Q 292 100 312 120 L 300 200 Q 256 180 212 200 Z" fill="#4A4A4A"/>
+  
+  <!-- Inner ears -->
+  <path d="M 145 170 Q 130 110 155 85 Q 175 75 190 130 L 175 170 Z" fill="#FFB6C1"/>
+  <path d="M 367 170 Q 382 110 357 85 Q 337 75 322 130 L 337 170 Z" fill="#FFB6C1"/>
+  
+  <!-- White face mask -->
+  <path d="M 200 200 Q 256 170 312 200 L 310 300 Q 256 320 202 300 Z" fill="#FFFFFF"/>
+  
+  <!-- Forehead arrow (white) -->
+  <path d="M 240 140 L 256 120 L 272 140 L 265 200 Q 256 195 247 200 Z" fill="#FFFFFF"/>
+  
+  <!-- Eyes -->
+  <ellipse cx="210" cy="240" rx="22" ry="24" fill="#FFFFFF"/>
+  <ellipse cx="302" cy="240" rx="22" ry="24" fill="#FFFFFF"/>
+  <circle cx="213" cy="243" r="14" fill="#2196F3"/>
+  <circle cx="299" cy="243" r="14" fill="#2196F3"/>
+  <circle cx="216" cy="238" r="5" fill="#FFFFFF"/>
+  <circle cx="302" cy="238" r="5" fill="#FFFFFF"/>
+  <circle cx="213" cy="243" r="4" fill="#1A1A1A"/>
+  <circle cx="299" cy="243" r="4" fill="#1A1A1A"/>
+  
+  <!-- Nose -->
+  <ellipse cx="256" cy="310" rx="20" ry="15" fill="#2D2D2D"/>
+  <ellipse cx="256" cy="306" rx="6" ry="4" fill="#666666"/>
+  
+  <!-- Mouth -->
+  <path d="M 256 325 Q 240 345 230 340" fill="none" stroke="#3D3D3D" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 256 325 Q 272 345 282 340" fill="none" stroke="#3D3D3D" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Tongue -->
+  <ellipse cx="256" cy="355" rx="12" ry="18" fill="#FF6B8A"/>
+  <line x1="256" y1="340" x2="256" y2="365" stroke="#E85577" stroke-width="2"/>
+  
+  <!-- Cheek fur tufts -->
+  <path d="M 130 260 Q 110 280 120 310 Q 130 300 140 280 Q 135 270 130 260" fill="#D0D0D0"/>
+  <path d="M 382 260 Q 402 280 392 310 Q 382 300 372 280 Q 377 270 382 260" fill="#D0D0D0"/>
+</svg>

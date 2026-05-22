@@ -1,193 +1,196 @@
 # Plan Viewer
 
-项目状态追踪的交互式可视化工具 — 桌面版 (Tauri) + 网页版。
+[中文](README_CN.md) | **English**
 
-将 [project-state-tracker](https://github.com/shajieChen/kiro-skill-project-state-tracker) 管理的 `status.yaml` 转化为可交互的泳道图 / DAG 依赖图，让你随时掌握工件进度、依赖关系和阻塞点。
+An interactive visualization tool for project state tracking — Desktop (Tauri) + Web editions.
 
----
-
-## 演示
-
-### 桌面版 (exe)
-
-![桌面版演示](Docs/PNG/Plan_Viewer_Exe.gif)
-
-> Always-on-Top 悬浮窗，鼠标离开自动缩小，一键聚焦绑定进程。
-
-### 网页版 (web)
-
-![网页版演示](Docs/PNG/Website_Exe.gif)
-
-> 浏览器直接访问，Mermaid 图表 + Markdown 预览，REST API 支持外部集成。
+Transforms `status.yaml` managed by [project-state-tracker](https://github.com/shajieChen/kiro-skill-project-state-tracker) into interactive swim-lane diagrams / DAG dependency graphs, giving you real-time visibility into artifact progress, dependencies, and blockers.
 
 ---
 
-## Skill 联动架构
+## Demo
 
-Plan Viewer 不是孤立工具，它是 Skill 闭环工作流的**可视化终端**。以下 ASCII 图展示了各 Skill 如何协作：
+### Desktop (exe)
+
+![Desktop Demo](Docs/PNG/Plan_Viewer_Exe.gif)
+
+> Always-on-Top floating window, auto-shrinks when cursor leaves, one-click focus on bound process.
+
+### Web
+
+![Web Demo](Docs/PNG/Website_Exe.gif)
+
+> Access directly in browser, Mermaid charts + Markdown preview, REST API for external integrations.
+
+---
+
+## Skill Integration Architecture
+
+Plan Viewer is not a standalone tool — it is the **visualization terminal** of a closed-loop Skill workflow. The diagram below shows how each Skill collaborates:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Skill 闭环工作流                                 │
+│                      Skill Closed-Loop Workflow                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  ┌───────────────┐   注册 draft    ┌───────────────────┐               │
-│  │  PSS          │ ──────────────▶ │  PST              │               │
-│  │  (Spec 编写)  │                 │  (状态追踪/渲染)  │               │
-│  │               │◀── 读取依赖 ──  │                   │               │
-│  └───────┬───────┘                 └─────────┬─────────┘               │
-│          │                                   │                          │
-│          │ 生成 LandingPrompt                │ 生成 views/ + README     │
-│          ▼                                   ▼                          │
-│  ┌───────────────┐                 ┌───────────────────┐               │
-│  │  ELP          │   回流状态      │  Plan Viewer      │               │
-│  │  (执行 LP)    │ ──────────────▶ │  (可视化展示)     │               │
-│  └───────┬───────┘                 └───────────────────┘               │
-│          │                                   ▲                          │
-│          │ Result 持久化                     │ 读取 status.yaml         │
-│          ▼                                   │                          │
-│  ┌───────────────┐                           │                          │
-│  │  Result/      │ ─── 历史归档 ─────────────┘                          │
+│  ┌───────────────┐  register draft  ┌───────────────────┐              │
+│  │  PSS          │ ───────────────▶ │  PST              │              │
+│  │  (Spec Author)│                  │  (State Tracking) │              │
+│  │               │◀── read deps ──  │                   │              │
+│  └───────┬───────┘                  └─────────┬─────────┘              │
+│          │                                    │                         │
+│          │ generate LandingPrompt             │ generate views/ + README│
+│          ▼                                    ▼                         │
+│  ┌───────────────┐                  ┌───────────────────┐              │
+│  │  ELP          │  flow back status│  Plan Viewer      │              │
+│  │  (Execute LP) │ ───────────────▶ │  (Visualization)  │              │
+│  └───────┬───────┘                  └───────────────────┘              │
+│          │                                    ▲                         │
+│          │ persist Result                     │ read status.yaml        │
+│          ▼                                    │                         │
+│  ┌───────────────┐                            │                         │
+│  │  Result/      │ ─── archive history ───────┘                         │
 │  └───────────────┘                                                      │
 │                                                                         │
-│  循环: PSS → PST → ELP → PST(审计推进) → 循环                          │
+│  Loop: PSS → PST → ELP → PST (audit & advance) → Loop                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 数据流说明
+### Data Flow
 
 ```
-status.yaml ──读取──▶ Plan Viewer (exe/web) ──展示──▶ 泳道图 / DAG
-     ▲                                                      │
-     │                                                      │ 点击修改状态
-     └──────────────── 写回 ────────────────────────────────┘
+status.yaml ──read──▶ Plan Viewer (exe/web) ──display──▶ Swim-lane / DAG
+     ▲                                                        │
+     │                                                        │ click to change status
+     └──────────────── write back ────────────────────────────┘
 ```
 
 ---
 
-## 各 Skill 职责
+## Skill Responsibilities
 
-| Skill | 全称 | 触发方式 | 职责 |
-|-------|------|----------|------|
-| **PST** | project-state-tracker | `"init"` / `"audit"` | 9-state 状态机、依赖图构建、SCL Pipeline、视图渲染 |
-| **PSS** | project-state-spec | `Skill PSS + new <topic>` | 三阶段 Spec 编写 (R→D→Task)，生成 Plan + LP + TP |
-| **ELP** | Execute-LandingPrompt | `Skill ELP + <LP文件>` | 执行 LP 实施任务，自动回流状态到 status.yaml |
-| **MQA** | module-quick-analysis | `Skill MQA + <模块名>` | 5 分钟快速理解陌生模块的设计与职责 |
+| Skill | Full Name | Trigger | Responsibility |
+|-------|-----------|---------|----------------|
+| **PST** | project-state-tracker | `"init"` / `"audit"` | 9-state machine, dependency graph, SCL Pipeline, view rendering |
+| **PSS** | project-state-spec | `Skill PSS + new <topic>` | Three-phase Spec authoring (R→D→Task), generates Plan + LP + TP |
+| **ELP** | Execute-LandingPrompt | `Skill ELP + <LP file>` | Executes LP implementation tasks, auto-flows status back to status.yaml |
+| **MQA** | module-quick-analysis | `Skill MQA + <module>` | 5-minute rapid understanding of unfamiliar module design & responsibilities |
 
-### Skill 安装
+### Skill Installation
 
-所有 Skill 源码位于 `Tools/Skills/`，通过统一安装脚本分发到各 AI Agent：
+All Skill source code lives in `Tools/Skills/`, distributed to AI Agents via a unified install script:
 
 ```bash
 python Tools/install_skills.py
 ```
 
-支持的 Agent 目标：
+Supported Agent targets:
 
-| Agent | 安装形式 | 目标路径 |
-|-------|----------|----------|
-| Kiro | 文件夹复制 | `~/.kiro/skills/<skill>/` |
-| Cursor | MDC 单文件 | `~/.cursor/rules/<skill>.mdc` |
-| Claude | 文件夹复制 | `~/.claude/skills/<skill>/` |
-| Copilot | 合并文件 | `~/.github/copilot-instructions.md` |
-| Codex | 合并文件 | `~/.codex/AGENTS.md` |
-
----
-
-## 功能对照：桌面版 vs 网页版
-
-| 功能 | 桌面版 (exe) | 网页版 (web) |
-|------|:---:|:---:|
-| 泳道图 / DAG 依赖图 | ✅ | ✅ |
-| 节点详情面板（依赖、change_events） | ✅ | ✅ |
-| Markdown 预览 | ✅ | ✅ |
-| 多项目管理（添加/删除/切换） | ✅ | ✅ |
-| 状态点击修改（直接写回 status.yaml） | ✅ | ✅ |
-| Smart Group Derivation（依赖链聚类分组） | ✅ | ✅ |
-| Always-on-Top 悬浮窗 | ✅ | ❌ |
-| 窗口自动缩放（鼠标离开缩小） | ✅ | ❌ |
-| 进程绑定 + 一键聚焦 | ✅ | ❌ |
-| Glassmorphism 透明暗色主题 | ✅ | ❌ |
-| 窗口尺寸记忆（per-project） | ✅ | ❌ |
-| 无需安装，浏览器直接访问 | ❌ | ✅ |
-| Mermaid 图表渲染 | ❌ | ✅ |
-| REST API（项目增删/状态修改） | ❌ | ✅ |
-| 启动时自动打开浏览器 | ❌ | ✅ |
+| Agent | Install Method | Target Path |
+|-------|---------------|-------------|
+| Kiro | Folder copy | `~/.kiro/skills/<skill>/` |
+| Cursor | MDC single file | `~/.cursor/rules/<skill>.mdc` |
+| Claude | Folder copy | `~/.claude/skills/<skill>/` |
+| Copilot | Merged file | `~/.github/copilot-instructions.md` |
+| Codex | Merged file | `~/.codex/AGENTS.md` |
 
 ---
 
-## 典型工作流（从 0 到 1）
+## Feature Comparison: Desktop vs Web
 
-以下场景展示一个完整的项目管理循环，帮助你理解各组件如何串联：
+| Feature | Desktop (exe) | Web |
+|---------|:---:|:---:|
+| Swim-lane / DAG dependency graph | ✅ | ✅ |
+| Node detail panel (deps, change_events) | ✅ | ✅ |
+| Markdown preview | ✅ | ✅ |
+| Multi-project management (add/delete/switch) | ✅ | ✅ |
+| Click-to-change status (writes back to status.yaml) | ✅ | ✅ |
+| Smart Group Derivation (dependency-chain clustering) | ✅ | ✅ |
+| Always-on-Top floating window | ✅ | ❌ |
+| Auto window resize (shrinks when cursor leaves) | ✅ | ❌ |
+| Process binding + one-click focus | ✅ | ❌ |
+| Glassmorphism dark transparent theme | ✅ | ❌ |
+| Window size memory (per-project) | ✅ | ❌ |
+| No install needed, browser access | ❌ | ✅ |
+| Mermaid chart rendering | ❌ | ✅ |
+| REST API (project CRUD / status changes) | ❌ | ✅ |
+| Auto-open browser on start | ❌ | ✅ |
+
+---
+
+## Typical Workflow (From Zero to One)
+
+The following scenario demonstrates a complete project management cycle, showing how each component connects:
 
 ```
-步骤 1 ─ 初始化项目结构
+Step 1 ─ Initialize project structure
          $ cd my-project
-         对 AI 说: "init"
-         → PST 创建 status/ 目录 + status.yaml + schema.yaml
+         Tell AI: "init"
+         → PST creates status/ directory + status.yaml + schema.yaml
                                                           │
-步骤 2 ─ 编写 Spec                                       │
-         对 AI 说: "Skill PSS + new user-auth"            │
-         → PSS 引导需求收集 → 生成 Research + Decision    │
-         → 生成 Plan + LandingPrompt + TestPrompt         │
-         → 自动注册到 status.yaml (draft)                 │
+Step 2 ─ Author Spec                                     │
+         Tell AI: "Skill PSS + new user-auth"            │
+         → PSS guides requirement gathering              │
+         → Generates Research + Decision                  │
+         → Generates Plan + LandingPrompt + TestPrompt   │
+         → Auto-registers to status.yaml (draft)         │
                                                           │
-步骤 3 ─ PST 审计 + 渲染视图                             │
-         对 AI 说: "audit"                                │
-         → PST 运行 SCL Pipeline                          │
-         → 生成 views/ (泳道图、DAG、统计)                │
-         → 更新 README                                    │
+Step 3 ─ PST Audit + Render Views                        │
+         Tell AI: "audit"                                │
+         → PST runs SCL Pipeline                         │
+         → Generates views/ (swim-lane, DAG, stats)      │
+         → Updates README                                │
                                                           │
-步骤 4 ─ 执行 LandingPrompt                              │
-         对 AI 说: "Skill ELP + prompts/landing/LP-001.md"│
-         → ELP 按步骤执行实施任务                         │
-         → 完成后自动回流状态 (draft → ready)             │
-         → Handoff 归档到 Result/                         │
+Step 4 ─ Execute LandingPrompt                           │
+         Tell AI: "Skill ELP + prompts/landing/LP-001.md"│
+         → ELP executes implementation steps             │
+         → Auto-flows status on completion (draft→ready) │
+         → Archives handoff to Result/                   │
                                                           │
-步骤 5 ─ 查看进度                                        │
-         桌面版: 运行 build.bat → 悬浮窗实时显示          │
-         网页版: python dashboard_server.py → 浏览器打开  │
-         → 泳道图展示所有工件状态                         │
-         → 点击节点查看详情 / 修改状态                    │
+Step 5 ─ View Progress                                   │
+         Desktop: run build.bat → floating window        │
+         Web: python dashboard_server.py → browser opens │
+         → Swim-lane shows all artifact states           │
+         → Click nodes to view details / change status   │
                                                           │
-步骤 6 ─ 循环                                            │
-         → PST audit 发现下一批 ready 工件                │
-         → 回到步骤 2，继续下一轮 Spec                    │
+Step 6 ─ Loop                                            │
+         → PST audit discovers next batch of ready items │
+         → Return to Step 2, continue next Spec round    │
 ```
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 前置条件
+### Prerequisites
 
-- Python 3.9+ (网页版)
-- Rust + Node.js (桌面版编译)
+- Python 3.9+ (Web edition)
+- Rust + Node.js (Desktop compilation)
 - `pip install -r requirements.txt`
 
-### 网页版
+### Web Edition
 
 ```bash
 python dashboard_server.py
-# 自动打开 http://localhost:8000/dashboard.html
+# Auto-opens http://localhost:8000/dashboard.html
 ```
 
-或使用快捷脚本：
+Or use the shortcut script:
 
 ```bash
 serve.bat
 ```
 
-### 桌面版
+### Desktop Edition
 
 ```bash
 cd plan-viewer-desktop
 npm install
 npm run tauri build
-# 产物在 src-tauri/target/release/
+# Output in src-tauri/target/release/
 ```
 
-开发模式：
+Development mode:
 
 ```bash
 npm run tauri dev
@@ -195,97 +198,97 @@ npm run tauri dev
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 Plan_Viewer/
-├── dashboard_server.py      # 网页版 HTTP 服务器 + REST API
-├── dashboard_template.html  # 网页版 HTML 模板（React CDN + Mermaid）
-├── render_dashboard.py      # Dashboard 生成器（读取 status.yaml → HTML）
-├── project_store.py         # 项目列表持久化 (projects.json)
-├── serve.bat                # 一键启动网页版
-├── build.bat                # 一键编译桌面版
+├── dashboard_server.py      # Web HTTP server + REST API
+├── dashboard_template.html  # Web HTML template (React CDN + Mermaid)
+├── render_dashboard.py      # Dashboard generator (reads status.yaml → HTML)
+├── project_store.py         # Project list persistence (projects.json)
+├── serve.bat                # One-click web server launch
+├── build.bat                # One-click desktop build
 │
-├── plan-viewer-desktop/     # 桌面版 (Tauri + Preact + Vite)
+├── plan-viewer-desktop/     # Desktop edition (Tauri + Preact + Vite)
 │   ├── src/
-│   │   ├── App.jsx          # 主应用（泳道图、详情面板、进程绑定）
-│   │   ├── components/      # UI 组件（TitleBar, SwimLane, DetailPanel...）
-│   │   └── hooks/           # 自定义 Hooks（useProjects, useWindowAutoShrink...）
+│   │   ├── App.jsx          # Main app (swim-lane, detail panel, process binding)
+│   │   ├── components/      # UI components (TitleBar, SwimLane, DetailPanel...)
+│   │   └── hooks/           # Custom Hooks (useProjects, useWindowAutoShrink...)
 │   └── src-tauri/
-│       └── src/             # Rust 后端（进程枚举、窗口聚焦、文件操作）
+│       └── src/             # Rust backend (process enum, window focus, file ops)
 │
 ├── Tools/
-│   ├── Skills/              # Skill 源码 (git submodules)
+│   ├── Skills/              # Skill source (git submodules)
 │   │   ├── project-state-tracker/
 │   │   ├── project-state-spec/
 │   │   ├── Execute-LandingPrompt/
 │   │   ├── module-quick-analysis/
 │   │   └── OpenSpec/
-│   └── install_skills.py    # 统一 Skill 安装脚本（→ Kiro/Cursor/Claude/Copilot/Codex）
+│   └── install_skills.py    # Unified Skill installer (→ Kiro/Cursor/Claude/Copilot/Codex)
 │
 ├── Docs/
-│   ├── PNG/                 # 演示 GIF
-│   ├── specs/               # 设计文档
-│   ├── plans/               # 实施计划
-│   └── research/            # 调研文档
+│   ├── PNG/                 # Demo GIFs
+│   ├── specs/               # Design documents
+│   ├── plans/               # Implementation plans
+│   └── research/            # Research documents
 │
-├── views/                   # 生成的 Dashboard HTML
-└── tests/                   # pytest 测试
+├── views/                   # Generated Dashboard HTML
+└── tests/                   # pytest tests
 ```
 
 ---
 
-## 技术栈
+## Tech Stack
 
-| 层 | 技术 |
-|----|------|
-| 桌面框架 | Tauri 2.x (Rust backend) |
-| 桌面前端 | Preact + Vite |
-| 网页前端 | React 18 CDN + Tailwind CSS + Mermaid.js + marked.js |
-| 网页后端 | Python stdlib `http.server` + PyYAML |
-| 数据格式 | YAML (status.yaml) + JSON (projects.json) |
-| 测试 | pytest + Hypothesis (property-based testing) |
-| Skill 分发 | Python 脚本 → 5 种 Agent 格式 |
-
----
-
-## REST API（网页版）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/projects` | 获取项目列表 |
-| POST | `/api/projects` | 添加项目 |
-| POST | `/api/projects/initialize` | 初始化项目结构 |
-| DELETE | `/api/projects` | 删除项目 |
-| PATCH | `/api/artifact/status` | 修改工件状态 |
-| POST | `/api/regenerate` | 手动触发 Dashboard 重新生成 |
-| GET | `/api/file?path=<rel>` | 获取项目源文件内容 |
+| Layer | Technology |
+|-------|-----------|
+| Desktop Framework | Tauri 2.x (Rust backend) |
+| Desktop Frontend | Preact + Vite |
+| Web Frontend | React 18 CDN + Tailwind CSS + Mermaid.js + marked.js |
+| Web Backend | Python stdlib `http.server` + PyYAML |
+| Data Format | YAML (status.yaml) + JSON (projects.json) |
+| Testing | pytest + Hypothesis (property-based testing) |
+| Skill Distribution | Python script → 5 Agent formats |
 
 ---
 
-## 测试
+## REST API (Web Edition)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/projects` | List projects |
+| POST | `/api/projects` | Add project |
+| POST | `/api/projects/initialize` | Initialize project structure |
+| DELETE | `/api/projects` | Delete project |
+| PATCH | `/api/artifact/status` | Change artifact status |
+| POST | `/api/regenerate` | Manually trigger Dashboard regeneration |
+| GET | `/api/file?path=<rel>` | Get project source file content |
+
+---
+
+## Testing
 
 ```bash
 pip install -r requirements.txt
 pytest tests/
 ```
 
-使用 [Hypothesis](https://hypothesis.readthedocs.io/) 进行 property-based testing，确保状态机流转和数据解析的正确性。
+Uses [Hypothesis](https://hypothesis.readthedocs.io/) for property-based testing to ensure correctness of state machine transitions and data parsing.
 
 ---
 
-## 关联仓库
+## Related Repositories
 
-| Skill | 仓库 | 用途 |
-|-------|------|------|
-| project-state-tracker | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-tracker) | 工件生命周期管理 + 状态追踪 |
-| project-state-spec | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-spec) | 三阶段 Spec 编写 (R→D→Task) |
-| Execute-LandingPrompt | [GitHub](https://github.com/shajieChen/kiro-skill-execute-landingprompt) | 执行 LP 并回流状态 |
-| module-quick-analysis | [GitHub](https://github.com/shajieChen/kiro-skill-module-quick-analysis) | 模块快速分析 |
-| OpenSpec | [GitHub](https://github.com/Fission-AI/OpenSpec) | Spec 打开/导航 |
+| Skill | Repository | Purpose |
+|-------|-----------|---------|
+| project-state-tracker | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-tracker) | Artifact lifecycle management + state tracking |
+| project-state-spec | [GitHub](https://github.com/shajieChen/kiro-skill-project-state-spec) | Three-phase Spec authoring (R→D→Task) |
+| Execute-LandingPrompt | [GitHub](https://github.com/shajieChen/kiro-skill-execute-landingprompt) | Execute LP and flow status back |
+| module-quick-analysis | [GitHub](https://github.com/shajieChen/kiro-skill-module-quick-analysis) | Rapid module analysis |
+| OpenSpec | [GitHub](https://github.com/Fission-AI/OpenSpec) | Spec open/navigation |
 
 ---
 
-## 许可证
+## License
 
 MIT
